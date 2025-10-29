@@ -1,19 +1,17 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+templates = Jinja2Templates(directory="./Fininsight/templates")
 from pydantic import BaseModel
 import os
 import asyncio
 import sys
+from jose import jwt
+import requests
 
-from LLM.services import call_openai_model, call_gemini_model, call_grok_model, call_openai_deep_research_model
+from LLM.services import call_openai_model, call_gemini_model, call_grok_model, call_deep_research_model
 from LLM.models import ModelRequest
-
-# Windows 환경에서 uvicorn 실행 시 asyncio 이벤트 루프 정책 설정
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 app = FastAPI()
 
@@ -35,12 +33,85 @@ def read_root():
     """
     return {"status": "ok", "message": "AI service backend running"}
 
+## ────────────────────기본 라우트─────────────────────────
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    """
+    메인 페이지 - 로그인 UI 제공
+    """
+    return templates.TemplateResponse("login_UI.html", {"request": request})
+
+
+## ─────────────────────Google 로그인 플로우────────────────────────
+@app.get("/auth/google/login")
+def google_login():
+    """
+    Google OAuth 인증 페이지로 리다이렉트
+    """
+    google_auth_endpoint = (
+        "https://accounts.google.com/o/oauth2/v2/auth"
+        "?response_type=code"
+        f"&client_id={GOOGLE_CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
+        "&scope=openid%20email%20profile"
+    )
+    return RedirectResponse(url=google_auth_endpoint)
+
+
+@app.get("/auth/google/callback")
+def google_callback(code: str):
+    """
+    Google 인증 완료 후 callback 처리
+    - Access token 발급
+    - 사용자 정보 저장
+    - JWT 생성 후 반환
+    """
+    ## Access Token 요청
+    token_url = "https://oauth2.googleapis.com/token"
+    data = {
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }
+    token_response = requests.post(token_url, data=data).json()
+    access_token = token_response.get("access_token")
+
+    ## 사용자 정보 요청
+    userinfo = requests.get(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        headers={"Authorization": f"Bearer {access_token}"}
+    ).json()
+
+    ## 사용자 정보를 DB에 저장
+    save_user(userinfo["email"], userinfo["name"], userinfo["picture"])
+
+    ## JWT 생성
+    jwt_token = jwt.encode(
+        {"email": userinfo["email"], "name": userinfo["name"]},
+        "SECRET_KEY",
+        algorithm="HS256"
+    )
+
+    ## 로그인 성공 페이지 반환
+    html_content = f"""
+    <h2>로그인 성공</h2>
+    <p>이메일: {userinfo['email']}</p>
+    <p>이름: {userinfo['name']}</p>
+    <img src="{userinfo['picture']}" alt="profile" width="100"><br><br>
+    <p><b>JWT 토큰:</b></p>
+    <textarea rows="5" cols="60">{jwt_token}</textarea><br><br>
+    <a href="/">홈으로 돌아가기</a>
+    """
+    return HTMLResponse(content=html_content)
+
 @app.post("/agent-call/{model_name}")
 def agent_call(model_name: str, req: ModelRequest):
     """
     AI 모델 호출 단일 엔드포인트.
 
-    - model_name: 호출할 AI 모델명 (예: openai, gemini, grok, gpt-4o-search-preview)
+    - model_name: 호출할 AI 모델명 (예: openai, gemini, grok, gpt-4o-search-preview, gemini-2.5-pro)
     - req: 요청 바디로 session_id, prompt 포함
     - 지정된 모델의 서비스 함수 호출 후 JSON 응답 반환
 
@@ -74,8 +145,8 @@ def agent_call(model_name: str, req: ModelRequest):
         return call_gemini_model(req)
     elif model_name == "grok":
         return call_grok_model(req)
-    elif model_name == "gpt-4o-search-preview":
-        return call_openai_deep_research_model(req)
+    elif model_name in ["gpt-4o-search-preview", "gemini-2.5-pro"]:
+        return call_deep_research_model(req)
     else:
         raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
 
@@ -84,12 +155,17 @@ if __name__ == "__main__":
     import sys
     import asyncio
 
-    # Windows 호환을 위한 이벤트 루프 정책 설정
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        loop = asyncio.ProactorEventLoop()
+        asyncio.set_event_loop(loop)
+    else:
+        loop = None
+
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, loop=loop)
 
     # FastAPI + uvicorn 서버 실행 (로컬 8000 포트)
-    # 터미널에서 아래 명령으로 실행
+    # 터미널에서 아래 명령으로 실행 가능
     # python main.py
-    # React 개발서는 보통 터미널에서 별도 `npm start`로 localhost:3000 실행
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    # React 개발서는 별도 터미널에서 `npm start`로 localhost:3000 실행
+
