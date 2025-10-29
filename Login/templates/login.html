@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>Google 로그인 테스트</title>
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 100px; }
+    button {
+      background-color: #4285F4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #357ae8;
+    }
+  </style>
+</head>
+<body>
+  <h2>Google OAuth 로그인 테스트</h2>
+  <p>아래 버튼을 눌러 구글 계정으로 로그인하세요.</p>
+  <button onclick="window.location.href='/auth/google/login'">
+    Google로 로그인
+  </button>
+</body>
+</html>

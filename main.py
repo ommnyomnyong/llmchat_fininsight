@@ -1,8 +1,7 @@
-from fastapi import FastAPI, Request, HTTPException, Form
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-templates = Jinja2Templates(directory="./Fininsight/templates")
 from pydantic import BaseModel
 import os
 import asyncio
@@ -12,6 +11,8 @@ import requests
 
 from LLM.services import call_openai_model, call_gemini_model, call_grok_model, call_deep_research_model
 from LLM.models import ModelRequest
+from Login.login import render_login_page, get_google_login_redirect, handle_google_callback
+
 
 app = FastAPI()
 
@@ -25,6 +26,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    """
+    메인 로그인 페이지 렌더링 엔드포인트
+
+    - 역할: 로그인 UI (예: 이메일+비밀번호 입력, Google 로그인 버튼 등)를 사용자에게 보여줌
+    - 프론트에서 활용법:
+      • 사용자가 웹사이트 접속 시 이 URL(`"/"`)을 호출하여 로그인 화면을 받음
+      • 로그인 UI에서 사용자는 로그인 정보 입력 혹은 OAuth 로그인 버튼 클릭 가능
+      • React 같은 SPA 환경이라면 초기 페이지 로딩용으로 사용 가능
+    """
+    return render_login_page(request)
+
+
+@app.get("/auth/google/login")
+def google_login():
+    """
+    Google OAuth 인증 시작을 위해 Google 로그인 페이지로 리다이렉트하는 엔드포인트
+
+    - 역할: Google 로그인을 위해 OAuth 인증 URL로 리다이렉션 처리
+    - 프론트에서 활용법:
+      • 로그인 UI에서 사용자가 'Google로 로그인' 버튼 클릭 시 이 엔드포인트를 호출
+      • 호출 즉시 Google OAuth 인증 페이지로 이동함 (사용자 인증/권한 요청)
+      • OAuth 인증 끝나면 Google이 미리 지정한 콜백 URL로 리다이렉트(예: `/auth/google/callback`)
+    """
+    return get_google_login_redirect()
+
+
+@app.get("/auth/google/callback")
+def google_callback(code: str):
+    """
+    Google OAuth 인증 콜백 엔드포인트
+
+    - 역할:
+      • Google 로그인 완료 후 Google OAuth 서버가 리다이렉트하면서 전달하는 인증 코드(`code`)를 받음
+      • 이 `code`를 이용해 Google OAuth 서버에 액세스 토큰 발급 요청을 수행
+      • 액세스 토큰을 바탕으로 Google 사용자 정보를 API로 요청
+      • 사용자 정보를 내부 DB에 저장 (회원 관리 목적)
+      • JWT 토큰을 생성해, 로그인 성공 정보를 사용자에게 보여줌
+    - 프론트에서 활용법:
+      • 사용자가 Google 로그인 과정 완료 후 자동으로 이 엔드포인트가 호출됨
+      • 종료 화면에서 이메일, 이름, 프로필 사진, JWT 토큰 등을 확인 가능
+      • 별도 UI가 아닌 API 호출 이후 리턴되는 HTML 페이지를 바로 보여주는 구조
+      • 추후 JWT 토큰을 이용해 클라이언트 세션 관리 및 API 인증에 활용 가능
+    """
+    return handle_google_callback(code)
+
+
 @app.get("/")
 def read_root():
     """
@@ -33,78 +83,6 @@ def read_root():
     """
     return {"status": "ok", "message": "AI service backend running"}
 
-## ────────────────────기본 라우트─────────────────────────
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    """
-    메인 페이지 - 로그인 UI 제공
-    """
-    return templates.TemplateResponse("login_UI.html", {"request": request})
-
-
-## ─────────────────────Google 로그인 플로우────────────────────────
-@app.get("/auth/google/login")
-def google_login():
-    """
-    Google OAuth 인증 페이지로 리다이렉트
-    """
-    google_auth_endpoint = (
-        "https://accounts.google.com/o/oauth2/v2/auth"
-        "?response_type=code"
-        f"&client_id={GOOGLE_CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
-        "&scope=openid%20email%20profile"
-    )
-    return RedirectResponse(url=google_auth_endpoint)
-
-
-@app.get("/auth/google/callback")
-def google_callback(code: str):
-    """
-    Google 인증 완료 후 callback 처리
-    - Access token 발급
-    - 사용자 정보 저장
-    - JWT 생성 후 반환
-    """
-    ## Access Token 요청
-    token_url = "https://oauth2.googleapis.com/token"
-    data = {
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": REDIRECT_URI,
-        "grant_type": "authorization_code",
-    }
-    token_response = requests.post(token_url, data=data).json()
-    access_token = token_response.get("access_token")
-
-    ## 사용자 정보 요청
-    userinfo = requests.get(
-        "https://www.googleapis.com/oauth2/v3/userinfo",
-        headers={"Authorization": f"Bearer {access_token}"}
-    ).json()
-
-    ## 사용자 정보를 DB에 저장
-    save_user(userinfo["email"], userinfo["name"], userinfo["picture"])
-
-    ## JWT 생성
-    jwt_token = jwt.encode(
-        {"email": userinfo["email"], "name": userinfo["name"]},
-        "SECRET_KEY",
-        algorithm="HS256"
-    )
-
-    ## 로그인 성공 페이지 반환
-    html_content = f"""
-    <h2>로그인 성공</h2>
-    <p>이메일: {userinfo['email']}</p>
-    <p>이름: {userinfo['name']}</p>
-    <img src="{userinfo['picture']}" alt="profile" width="100"><br><br>
-    <p><b>JWT 토큰:</b></p>
-    <textarea rows="5" cols="60">{jwt_token}</textarea><br><br>
-    <a href="/">홈으로 돌아가기</a>
-    """
-    return HTMLResponse(content=html_content)
 
 @app.post("/agent-call/{model_name}")
 def agent_call(model_name: str, req: ModelRequest):
