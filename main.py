@@ -89,7 +89,7 @@ if __name__ == "__main__":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
     # FastAPI + uvicorn 서버 실행 (로컬 8000 포트)
-    # 터미널에서 아래 명령으로 실행 가능
+    # 터미널에서 아래 명령으로 실행
     # python main.py
     # React 개발서는 보통 터미널에서 별도 `npm start`로 localhost:3000 실행
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
