@@ -6,8 +6,8 @@ import asyncio
 import sys
 
 
-from services import call_openai_model, call_gemini_model, call_grok_model, call_openai_deep_research_model
-from models import ModelRequest
+from LLM.services import call_openai_model, call_gemini_model, call_grok_model, call_openai_deep_research_model
+from LLM.models import ModelRequest
 
 import sys
 import asyncio
