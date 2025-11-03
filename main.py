@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from typing import Optional
 import os
 import asyncio
 import sys
@@ -12,7 +13,7 @@ import requests
 from LLM.services import call_openai_model, call_gemini_model, call_grok_model, call_deep_research_model
 from LLM.models import ModelRequest
 from Login.login import render_login_page, get_google_login_redirect, handle_google_callback
-
+from db.chat_DB import assign_chats_to_project 
 
 app = FastAPI()
 
@@ -127,6 +128,36 @@ def agent_call(model_name: str, req: ModelRequest):
         return call_deep_research_model(req)
     else:
         raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
+
+
+class AssignProjectRequest(BaseModel):
+  project_id: int
+  chat_ids: List[int]
+
+@app.post("/assign-chats-to-project")
+def assign_chats(req: AssignProjectRequest):
+    """
+    프로젝트에 할당되지 않은 채팅 기록들을 특정 프로젝트에 할당하는 API 엔드포인트입니다.
+
+    ■ 기능 설명:
+    - 프로젝트 ID와 채팅 기록 ID 리스트를 JSON 형태로 받아,
+      해당 채팅 기록들을 지정한 프로젝트에 할당(업데이트)합니다.
+    - DB 내부 chat_DB.py의 assign_chats_to_project 함수를 호출해 실제 DB를 업데이트합니다.
+
+    ■ 프론트엔드 활용법:
+    - React 등 프론트엔드에서는 이 엔드포인트에 POST 요청을 보낼 때,
+      JSON 바디에 아래와 같은 구조로 포함시켜 호출합니다:
+      {
+        "project_id": 123,         // 할당할 프로젝트 고유 ID
+        "chat_ids": [1, 2, 3, 4]   // 프로젝트에 연결할 채팅 기록들의 ID 리스트
+      }
+    - 응답으로는 성공 여부와 메시지를 받아 채팅 할당 성공/실패 여부를 사용자에게 표시할 수 있습니다.
+    """
+    try:
+        assign_chats_to_project(req.chat_ids, req.project_id)
+        return {"status": "success", "message": "Chats assigned to project successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to assign chats: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
