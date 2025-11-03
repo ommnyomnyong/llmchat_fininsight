@@ -1,10 +1,10 @@
 from sqlalchemy import text
-from backend.db.connection import engine
+from backend.db.connection import chat_engine
 
 ## 채팅 테이블 생성
 def init_chat_table():
     try:
-        with engine.connect() as conn:
+        with chat_engine.connect() as conn:
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS chats (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -13,7 +13,9 @@ def init_chat_table():
                     bot_output TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (project_id) REFERENCES projects(id)
-                );
+                        ON DELETE CASCADE
+                        ON UPDATE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """))
             conn.commit()
         print("✅ chats 테이블 생성 완료! ✅")
@@ -27,7 +29,7 @@ def save_chat(project_id: int, user_input: str, bot_output: str):
         INSERT INTO chats (project_id, user_input, bot_output)
         VALUES (:project_id, :user_input, :bot_output)
     """)
-    with engine.connect() as conn:
+    with chat_engine.connect() as conn:
         conn.execute(query, {
             "project_id": project_id,
             "user_input": user_input,
@@ -43,6 +45,6 @@ def get_chats(project_id: int):
         WHERE project_id = :project_id
         ORDER BY created_at ASC;
     """)
-    with engine.connect() as conn:
+    with chat_engine.connect() as conn:
         result = conn.execute(query, {"project_id": project_id}).fetchall()
     return [dict(row._mapping) for row in result]

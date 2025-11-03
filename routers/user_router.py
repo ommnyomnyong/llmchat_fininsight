@@ -6,8 +6,8 @@ from backend.db.user_DB import save_user
 
 router = APIRouter()
 
-GOOGLE_CLIENT_ID = "ID입력"
-GOOGLE_CLIENT_SECRET = "PW입력"
+GOOGLE_CLIENT_ID = "your_google_client_id"
+GOOGLE_CLIENT_SECRET = "your_google_client_secret"
 REDIRECT_URI = "http://localhost:8000/auth/google/callback"
 
 
@@ -19,7 +19,6 @@ def google_login():
         "?response_type=code"
         f"&client_id={GOOGLE_CLIENT_ID}"
         f"&redirect_uri={REDIRECT_URI}"
-        "&scope=openid%20email%20profile"
     )
     return RedirectResponse(url=google_auth_endpoint)
 
@@ -50,6 +49,10 @@ def google_callback(code: str):
     save_user(userinfo["email"], userinfo["name"], userinfo["picture"])
 
     ## JWT 발급
+    # -- 로그인 후 사용자를 식별하기 위해, 
+    # -- 서버가 아닌 토큰으로 인증 상태를 유지하기 위해
+    # -- 프론트엔드가 API 요청할 때, Authorization 헤더에 포함시키기 위해
+    # -- 구글 OAuth로 받은 사용자 정보를 바탕으로 JWT 발급 —> 이후엔 자체 인증 체계로 전환
     jwt_token = jwt.encode(
         {"email": userinfo["email"], "name": userinfo["name"]},
         "SECRET_KEY",
