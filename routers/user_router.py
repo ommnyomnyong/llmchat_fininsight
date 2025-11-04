@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 from jose import jwt
 import requests
-from backend.db.user_DB import save_user
+from db.user_DB import save_user
 
 router = APIRouter()
 

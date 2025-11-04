@@ -2,9 +2,8 @@
 ## 프로젝트 생성 및 조회
 from fastapi import APIRouter, Form, Query
 from fastapi.responses import JSONResponse
-from backend.db.project_DB import create_project, get_projects_by_email, save_project_file, get_projects
-# from backend.llm.LLM import embed_and_store
-# import os
+from db.project_DB import create_project, get_projects_by_email, save_project_file, get_projects
+
 
 router = APIRouter()
 
