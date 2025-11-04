@@ -73,9 +73,9 @@ def call_openai_model(req):
     api_url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     payload = {
-        "model": "gpt-3.5-turbo",
+        "model": "gpt-4o",
         "messages": session_histories[session_id],
-        "max_tokens": 256,
+        "max_tokens": 8192,
         "stream": True
     }
 
@@ -122,9 +122,9 @@ def call_gemini_model(req):
     gemini_api_url = "https://api.gemini.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GEMINI_API_KEY}"}
     payload = {
-        "model": "gemini-1",
+        "model": "gemini-2.5-flash",
         "messages": session_histories[session_id],
-        "max_tokens": 256,
+        "max_tokens": 8192,
         "stream": True
     }
 
@@ -175,7 +175,7 @@ def call_grok_model(req):
     payload = {
         "model": "grok-1",
         "messages": session_histories[session_id],
-        "max_tokens": 256,
+        "max_tokens": 8192,
         "stream": True
     }
 
@@ -208,18 +208,30 @@ def call_deep_research_model(req):
 
     if session_id not in session_histories:
         session_histories[session_id] = [
-            {"role": "system", "content": "You are a helpful assistant. 정보가 부족하면 궁금한 점을 추가로 물어보세요."}
+            {"role": "system",
+            "content": (
+                "You are a highly skilled deep research AI specialized in providing thorough, logical, and well-supported answers. "
+                "For each query:\n\n"
+                "- Analyze the question carefully.\n"
+                "- If there is insufficient information, ask clarifying questions to gather necessary details before answering.\n"
+                "- Use multiple reliable sources and combine information logically.\n"
+                "- Provide citations or references when applicable.\n"
+                "- Summarize the key points clearly and organize your response with headings and bullet points.\n"
+                "- Maintain a formal and professional tone.\n"
+                "- Deliver concise, precise, and insightful explanations aimed at professionals.\n\n"
+                "Now, please analyze the following query comprehensively:\n"
+                "[User’s query here]"
+            )}
         ]
-
     # 세션 임베딩 참조
     embedding = get_embedding_from_session(session_id)
-    context_text = "참고 문서 내용 포함" if embedding else ""
+    context_text = "Included reference document content:" if embedding else ""
 
     combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
     session_histories[session_id].append({"role": "user", "content": combined_prompt})
 
     try:
-        if getattr(req, "model_name", "") == "gemini-2.5-pro":
+        if getattr(req, "model_name", "") == "gemini-research":
             api_url = "https://api.gemini.ai/v1/responses"
             headers = {"Authorization": f"Bearer {GEMINI_API_KEY}"}
             payload = {
@@ -235,11 +247,11 @@ def call_deep_research_model(req):
             if "error" in result:
                 raise HTTPException(status_code=500, detail=f"Gemini API error: {result['error']}")
 
-            answer = result.get("output_text") or (result.get("output", [{}])[0].get("text") if "output" in result else "응답이 없습니다.")
+            answer = result.get("output_text") or (result.get("output", [{}])[0].get("text") if "output" in result else "No response.")
 
-            session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "gemini"})
+            session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "gemini-research"})
             if project_id is not None:
-                save_chat(project_id, combined_prompt, answer, "gemini")
+                save_chat(project_id, combined_prompt, answer, "gemini-research")
 
             return {"model": payload["model"], "answer": answer, "history": session_histories[session_id]}
         else:
@@ -248,13 +260,13 @@ def call_deep_research_model(req):
             payload = {
                 "model": "gpt-4o-search-preview",
                 "messages": session_histories[session_id],
-                "max_tokens": 256,
+                "max_tokens": 8192,
                 "stream": True,
             }
 
             response = requests.post(api_url, headers=headers, json=payload, stream=True, timeout=30)
             if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="OpenAI API 호출 실패")
+                raise HTTPException(status_code=response.status_code, detail="OpenAI API call failed")
 
             def event_generator():
                 answer = ""
@@ -272,22 +284,23 @@ def call_deep_research_model(req):
                                 yield token
                         except Exception:
                             continue
-                session_histories[session_id].append({"role": "assistant", "content": answer})
+                session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "openai-research"})
                 if project_id is not None:
-                    save_chat(project_id, combined_prompt, answer, "openai")
+                    save_chat(project_id, combined_prompt, answer, "openai-research")
 
             return StreamingResponse(event_generator(), media_type="text/plain")
 
     except requests.exceptions.Timeout:
         traceback.print_exc()
-        raise HTTPException(status_code=504, detail="Deep Research API 요청 시간 초과")
+        raise HTTPException(status_code=504, detail="Deep Research API request timeout")
     except requests.exceptions.ConnectionError:
         traceback.print_exc()
-        raise HTTPException(status_code=503, detail="Deep Research API 연결 실패")
+        raise HTTPException(status_code=503, detail="Deep Research API connection failed")
     except requests.exceptions.HTTPError as e:
         traceback.print_exc()
-        raise HTTPException(status_code=response.status_code, detail=f"Deep Research API HTTP 오류: {str(e)}")
+        raise HTTPException(status_code=response.status_code, detail=f"Deep Research API HTTP error: {str(e)}")
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Deep Research 모델 호출 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
+
 
