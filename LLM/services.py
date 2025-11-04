@@ -208,21 +208,24 @@ def call_deep_research_model(req):
 
     if session_id not in session_histories:
         session_histories[session_id] = [
-            {"role": "system",
-            "content": (
-                "You are a highly skilled deep research AI specialized in providing thorough, logical, and well-supported answers. "
-                "For each query:\n\n"
-                "- Analyze the question carefully.\n"
-                "- If there is insufficient information, ask clarifying questions to gather necessary details before answering.\n"
-                "- Use multiple reliable sources and combine information logically.\n"
-                "- Provide citations or references when applicable.\n"
-                "- Summarize the key points clearly and organize your response with headings and bullet points.\n"
-                "- Maintain a formal and professional tone.\n"
-                "- Deliver concise, precise, and insightful explanations aimed at professionals.\n\n"
-                "Now, please analyze the following query comprehensively:\n"
-                "[User’s query here]"
-            )}
-        ]
+                    {"role": "system",
+                    "content": (
+                        """
+                        You are an expert deep research AI specialized in providing thorough, logical, and well-supported answers.\n
+                        For every user query:\n"
+                        - Carefully analyze the question and the information provided.\n
+                        - If the information is insufficient or ambiguous, YOU MUST NOT answer immediately.\n
+                        - Instead, ask clarifying and detailed follow-up questions to gather all necessary data.\n
+                        - Only after receiving sufficient information, provide a thorough, step-by-step analysis.\n
+                        - Use multiple reliable sources and provide citations when possible.\n
+                        - Structure your answer with clear headings, bullet points, and summaries.\n
+                        - Use formal, precise, and professional language aimed at decision makers and analysts.\n
+                        - If you cannot proceed without more details, explicitly request them from the user.\n\n
+                        Now, please analyze the following query comprehensively:\n
+                        {user_query}
+                        """
+                    )}
+]
     # 세션 임베딩 참조
     embedding = get_embedding_from_session(session_id)
     context_text = "Included reference document content:" if embedding else ""
