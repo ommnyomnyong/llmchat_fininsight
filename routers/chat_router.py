@@ -12,7 +12,7 @@ from LLM.services import (
     call_deep_research_model,
 )
 from LLM.models import ModelRequest
-from typing import Optional
+from typing import Optional, Union
 
 router = APIRouter()
 
@@ -21,21 +21,24 @@ def agent_call(
     model_name: str,
     session_id: str = Form(...),
     prompt: str = Form(...),
-    file: UploadFile = File(None),
+    file: Optional[Union[UploadFile, str]] = File(None),
     project_id: Optional[str] = Form(None),
 ):
     try:
         text_from_file = None
-        if file:
+        # 빈 문자열일 경우 None으로 변환
+        if isinstance(file, str) and file == "":
+            file = None
+        if file is not None and getattr(file, "filename", None):
             content = file.file.read()
             file.file.seek(0)  # 파일 포인터 리셋
-
             from LLM.file_embeddings import extract_text_from_file
             text_from_file = extract_text_from_file(content, file.filename)
-
             if not text_from_file:
                 return "죄송합니다. 파일을 열어서 내용을 확인할 수 없기 때문에 요약해 드릴 수 없습니다."
-
+        else:
+            # file이 None이거나 filename이 빈 값일 경우 처리
+            text_from_file = None
         # project_id 문자열을 정수로 변환 시도
         if project_id:
             try:
@@ -61,7 +64,7 @@ def agent_call(
             return call_gemini_model(req)
         elif model_name == "grok":
             return call_grok_model(req)
-        elif model_name in ["gpt-4o-search-preview", "gemini-2.5-pro"]:
+        elif model_name in ["openai-research", "gemini-research"]:
             return call_deep_research_model(req)
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
