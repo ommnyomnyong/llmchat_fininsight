@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from backend.db.connection import user_engine
+from db.connection import user_engine
 
 
 ### DB 연결 확인

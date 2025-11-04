@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from backend.db.connection import chat_engine
+from db.connection import chat_engine
 
 """
 기존 코드에서 수정한 내용 (인용 수정)

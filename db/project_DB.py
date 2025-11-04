@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from backend.db.connection import project_engine
+from db.connection import project_engine
 
 
 ## projects 테이블 생성 
