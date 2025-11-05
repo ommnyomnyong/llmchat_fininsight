@@ -2,7 +2,7 @@
 import traceback
 from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
-from db.chat_DB import save_chat, get_chats
+from db.chat_DB import save_chat, get_chats, update_chat, get_chat_by_id
 from fastapi import APIRouter, Form, File, UploadFile, HTTPException, status
 from fastapi.responses import StreamingResponse
 from LLM.services import (
@@ -10,36 +10,39 @@ from LLM.services import (
     call_gemini_model,
     call_grok_model,
     call_deep_research_model,
+    update_session_history
 )
 from LLM.models import ModelRequest
 from typing import Optional, Union
 
 router = APIRouter()
 
+# 1. 채팅 수정 및 AI 재호출 API
 @router.post("/agent-call/{model_name}")
 def agent_call(
     model_name: str,
     session_id: str = Form(...),
     prompt: str = Form(...),
+    chat_id: Optional[int] = Form(None),
     file: Optional[Union[UploadFile, str]] = File(None),
     project_id: Optional[str] = Form(None),
 ):
     try:
+        # 2. 파일 처리 (업로드 파일이 있으면 텍스트 추출)
         text_from_file = None
-        # 빈 문자열일 경우 None으로 변환
         if isinstance(file, str) and file == "":
             file = None
         if file is not None and getattr(file, "filename", None):
             content = file.file.read()
-            file.file.seek(0)  # 파일 포인터 리셋
+            file.file.seek(0)
             from LLM.file_embeddings import extract_text_from_file
             text_from_file = extract_text_from_file(content, file.filename)
             if not text_from_file:
                 return "죄송합니다. 파일을 열어서 내용을 확인할 수 없기 때문에 요약해 드릴 수 없습니다."
         else:
-            # file이 None이거나 filename이 빈 값일 경우 처리
             text_from_file = None
-        # project_id 문자열을 정수로 변환 시도
+        
+        # 3. project_id 처리 및 타입 변환
         if project_id:
             try:
                 project_id_int = int(project_id)
@@ -47,27 +50,50 @@ def agent_call(
                 raise HTTPException(status_code=400, detail="project_id must be an integer")
         else:
             project_id_int = None
+        
 
-        # 요청 객체 생성, 파일 텍스트는 req.prompt에 합치는 등 원하는 로직으로 활용 가능
-        full_prompt = f"{text_from_file}\n{prompt}" if text_from_file else prompt
+        # 4. 수정 요청 처리: 기존 채팅 내용 조회 후 새 프롬프트 생성
+        if chat_id:
+            old_chat = get_chat_by_id(chat_id)  # chat_DB.py에 구현 필요
+            if old_chat is None:
+                raise HTTPException(status_code=404, detail="Chat not found")
+            # 기존 프롬프트 혹은 파일 텍스트와 사용자가 수정한 prompt를 적절히 조합
+            # 예) 새로운 프롬프트는 수정된 prompt + 파일 내용 등
+            new_prompt = f"{text_from_file}\n{prompt}" if text_from_file else prompt
+        else:
+            new_prompt = f"{text_from_file}\n{prompt}" if text_from_file else prompt
+
+        # 5. ModelRequest 생성
         req = ModelRequest(
             session_id=session_id,
-            prompt=full_prompt,
+            prompt=new_prompt,
             project_id=project_id_int,
             model_name=model_name,
         )
 
-        # 실제 AI 모델 호출
+        # 6. AI 모델 호출
         if model_name == "openai":
-            return call_openai_model(req)
+            ai_response = call_openai_model(req)
         elif model_name == "gemini":
-            return call_gemini_model(req)
+            ai_response = call_gemini_model(req)
         elif model_name == "grok":
-            return call_grok_model(req)
+            ai_response = call_grok_model(req)
         elif model_name in ["openai-research", "gemini-research"]:
-            return call_deep_research_model(req)
+            ai_response = call_deep_research_model(req)
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
+
+        # 7. DB 업데이트 혹은 신규 저장
+        if chat_id:
+            update_chat(chat_id, prompt, ai_response["answer"])
+        else:
+            save_chat(project_id_int, prompt, ai_response["answer"], model_name)
+
+        # 8. 세션 기록 동기화 - session_histories 수정
+        update_session_history(session_id, chat_id, prompt, ai_response["answer"])
+
+        # 9. 결과 반환
+        return ai_response
 
     except Exception as e:
         import traceback
