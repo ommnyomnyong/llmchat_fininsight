@@ -68,7 +68,14 @@ def call_openai_model(req):
 
     combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
 
-    session_histories[session_id].append({"role": "user", "content": combined_prompt})
+    # 1) 사용자 메시지 DB에 저장하면서 chat_id 얻기
+    chat_id_user = save_chat(project_id, combined_prompt, "", "unknown")
+    # 2) 세션 메시지에 chat_id 포함
+    session_histories[session_id].append({
+        "id": chat_id_user,
+        "role": "user",
+        "content": combined_prompt
+    })
 
     api_url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
@@ -94,10 +101,15 @@ def call_openai_model(req):
                     yield token
                 except Exception:
                     continue
-        session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "openai"})
-
-        if project_id is not None:
-            save_chat(project_id, prompt, answer, "openai")
+        # 3) AI 답변을 DB에 저장하면서 chat_id 얻기
+        chat_id_ai = save_chat(project_id, prompt, answer, "openai")
+        # 4) 세션에 AI 답변 메시지 추가할 때 id 포함
+        session_histories[session_id].append({
+            "id": chat_id_ai,
+            "role": "assistant",
+            "content": answer,
+            "bot_name": "openai"
+        })
 
     return StreamingResponse(event_generator(), media_type="text/plain")
 
@@ -107,48 +119,65 @@ def call_gemini_model(req):
     prompt = req.prompt
     project_id = getattr(req, "project_id", None)
 
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API 키가 설정되지 않았습니다.")
+
+    # ✅ 세션 초기화
     if session_id not in session_histories:
-        session_histories[session_id] = [{"role": "system", "content": "You are a helpful assistant."}]
+        session_histories[session_id] = [
+            {"role": "system", "content": "You are a helpful assistant."}
+        ]
 
-    # 세션 임베딩 참조
+    # ✅ 참고 문서 포함
     embedding = get_embedding_from_session(session_id)
-    context_text = "참고 문서 내용 포함" if embedding else ""
+    context_text = ""
+    if embedding:
+        context_text = "다음은 참고 문서 내용입니다:\n" + embedding
 
-    combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
+    # ✅ 사용자 프롬프트와 참고 문서를 결합
+    combined_prompt = f"{context_text}\n\n사용자 요청:\n{prompt}" if context_text else prompt
 
-    # 기존 세션 기록 뒤에 추가
-    session_histories[session_id].append({"role": "user", "content": combined_prompt})
+    # ✅ 사용자 메시지 DB 저장 및 chat_id 획득
+    chat_id_user = save_chat(project_id, combined_prompt, "", "unknown")
+    # ✅ 사용자 메시지 세션 기록에 저장 (id 포함)
+    session_histories[session_id].append({
+        "id": chat_id_user,
+        "role": "user",
+        "content": combined_prompt
+    })
 
-    gemini_api_url = "https://api.gemini.ai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GEMINI_API_KEY}"}
-    payload = {
-        "model": "gemini-2.5-flash",
-        "messages": session_histories[session_id],
-        "max_tokens": 8192,
-        "stream": True
-    }
+    # ✅ Gemini API 요청
+    gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    headers = {"Content-Type": "application/json"}
+    params = {"key": GEMINI_API_KEY}
+    payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
 
-    response = requests.post(gemini_api_url, headers=headers, json=payload, stream=True)
+    response = requests.post(gemini_url, headers=headers, params=params, json=payload)
+
     if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="Gemini API 호출 실패")
+        print("❌ Gemini API error:", response.text)
+        raise HTTPException(status_code=response.status_code, detail="Gemini API 호출 실패")
 
-    def event_generator():
-        answer = ""
-        for line in response.iter_lines():
-            if line:
-                try:
-                    json_line = json.loads(line.decode('utf-8').replace("data: ", ""))
-                    token = json_line['choices'][0].get('delta', {}).get('content', '')
-                    answer += token
-                    yield token
-                except Exception:
-                    continue
-        session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "gemini"})
+    # ✅ 응답 파싱
+    try:
+        data = response.json()
+        parts = data["candidates"][0]["content"]["parts"]
+        answer = "".join(p.get("text", "") for p in parts)
+    except Exception as e:
+        print("❌ Gemini 응답 파싱 오류:", data)
+        raise HTTPException(status_code=500, detail=f"Gemini 응답 파싱 실패: {str(e)}")
 
-        if project_id is not None:
-            save_chat(project_id, prompt, answer, "gemini")
+    # ✅ 답변 DB 저장 및 chat_id 획득
+    chat_id_ai = save_chat(project_id, prompt, answer, "gemini")
+    # ✅ 답변 세션 기록에 저장 (id 포함)
+    session_histories[session_id].append({
+        "id": chat_id_ai,
+        "role": "assistant",
+        "content": answer,
+        "bot_name": "gemini"
+    })
 
-    return StreamingResponse(event_generator(), media_type="text/plain")
+    return answer
 
 
 def call_grok_model(req):
@@ -159,16 +188,18 @@ def call_grok_model(req):
     if session_id not in session_histories:
         session_histories[session_id] = [{"role": "system", "content": "You are a helpful assistant."}]
 
-    # 세션 임베딩 참조
     embedding = get_embedding_from_session(session_id)
     context_text = "참고 문서 내용 포함" if embedding else ""
 
-    # 기존 메시지 + 참고문서 포함
-    messages = session_histories[session_id] + [{"role": "user", "content": f"{context_text}\n{prompt}"}]
-    # 세션 히스토리에 업데이트
-    session_histories[session_id] = [{"role": "system", "content": "You are a helpful assistant."}]
-    for msg in messages:
-        session_histories[session_id].append(msg)
+    combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
+
+    # 1) 사용자 메시지 DB에 저장하고 chat_id 얻기
+    chat_id_user = save_chat(project_id, combined_prompt, "", "unknown")
+    session_histories[session_id].append({
+        "id": chat_id_user,
+        "role": "user",
+        "content": combined_prompt
+    })
 
     api_url = "https://api.grok.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
@@ -194,13 +225,18 @@ def call_grok_model(req):
                     yield token
                 except Exception:
                     continue
-        session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "grok"})
-        if project_id is not None:
-            save_chat(project_id, prompt, answer, "grok")
+        # 3) 답변 메시지 DB 저장하고 chat_id 얻기
+        chat_id_ai = save_chat(project_id, prompt, answer, "grok")
+        session_histories[session_id].append({
+            "id": chat_id_ai,
+            "role": "assistant",
+            "content": answer,
+            "bot_name": "grok"
+        })
 
     return StreamingResponse(event_generator(), media_type="text/plain")
 
-
+    
 def call_deep_research_model(req):
     session_id = req.session_id
     prompt = req.prompt
@@ -208,7 +244,7 @@ def call_deep_research_model(req):
 
     if session_id not in session_histories:
         session_histories[session_id] = [
-                    {"role": "system",
+            {"role": "system",
                     "content": (
                         """
                         You are an expert deep research AI specialized in providing thorough, logical, and well-supported answers.\n
@@ -225,13 +261,18 @@ def call_deep_research_model(req):
                         {user_query}
                         """
                     )}
-]
-    # 세션 임베딩 참조
+        ]
     embedding = get_embedding_from_session(session_id)
     context_text = "Included reference document content:" if embedding else ""
-
     combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
-    session_histories[session_id].append({"role": "user", "content": combined_prompt})
+
+    # 1) 사용자 메시지 DB에 저장하고 chat_id 얻기
+    chat_id_user = save_chat(project_id, combined_prompt, "", "unknown")
+    session_histories[session_id].append({
+        "id": chat_id_user,
+        "role": "user",
+        "content": combined_prompt
+    })
 
     try:
         if getattr(req, "model_name", "") == "gemini-research":
@@ -251,11 +292,14 @@ def call_deep_research_model(req):
                 raise HTTPException(status_code=500, detail=f"Gemini API error: {result['error']}")
 
             answer = result.get("output_text") or (result.get("output", [{}])[0].get("text") if "output" in result else "No response.")
-
-            session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "gemini-research"})
-            if project_id is not None:
-                save_chat(project_id, combined_prompt, answer, "gemini-research")
-
+            # 2) 답변 DB에 저장 및 세션 메시지 추가
+            chat_id_ai = save_chat(project_id, combined_prompt, answer, "gemini-research")
+            session_histories[session_id].append({
+                "id": chat_id_ai,
+                "role": "assistant",
+                "content": answer,
+                "bot_name": "gemini-research"
+            })
             return {"model": payload["model"], "answer": answer, "history": session_histories[session_id]}
         else:
             api_url = "https://api.openai.com/v1/chat/completions"
@@ -266,7 +310,6 @@ def call_deep_research_model(req):
                 "max_tokens": 8192,
                 "stream": True,
             }
-
             response = requests.post(api_url, headers=headers, json=payload, stream=True, timeout=30)
             if response.status_code != 200:
                 raise HTTPException(status_code=response.status_code, detail="OpenAI API call failed")
@@ -287,23 +330,40 @@ def call_deep_research_model(req):
                                 yield token
                         except Exception:
                             continue
-                session_histories[session_id].append({"role": "assistant", "content": answer, "bot_name": "openai-research"})
-                if project_id is not None:
-                    save_chat(project_id, combined_prompt, answer, "openai-research")
-
+                # 답변을 DB에 저장하고 chat_id 기록
+                chat_id_ai = save_chat(project_id, combined_prompt, answer, "openai-research")
+                session_histories[session_id].append({
+                    "id": chat_id_ai,
+                    "role": "assistant",
+                    "content": answer,
+                    "bot_name": "openai-research"
+                })
             return StreamingResponse(event_generator(), media_type="text/plain")
-
-    except requests.exceptions.Timeout:
-        traceback.print_exc()
-        raise HTTPException(status_code=504, detail="Deep Research API request timeout")
-    except requests.exceptions.ConnectionError:
-        traceback.print_exc()
-        raise HTTPException(status_code=503, detail="Deep Research API connection failed")
-    except requests.exceptions.HTTPError as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=response.status_code, detail=f"Deep Research API HTTP error: {str(e)}")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
 
+
+# 채팅 내용 수정 시 session 변경
+def update_session_history(session_id: str, chat_id: int, new_user_input: str, new_bot_output: str):
+    # 세션 존재 확인
+    if session_id not in session_histories:
+        raise ValueError("Invalid session_id")
+
+    chat_list = session_histories[session_id]
+
+    for i, chat in enumerate(chat_list):
+        if chat.get("id") == chat_id:
+            # 해당 메시지 수정
+            chat_list[i]["content"] = new_user_input if chat.get("role") == "user" else chat_list[i]["content"]
+            # AI 답변 메시지는 같은 chat_id+1 등 별도 메시지라고 가정하여 처리 가능
+            # 보통 AI 답변 메시지는 바로 다음 인덱스에 위치한다고 가정
+            if i + 1 < len(chat_list) and chat_list[i + 1].get("role") == "assistant":
+                chat_list[i + 1]["content"] = new_bot_output
+            break
+    else:
+        raise ValueError("Chat message not found in session")
+
+    # 변경 반영
+    session_histories[session_id] = chat_list
 
