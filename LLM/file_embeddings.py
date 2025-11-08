@@ -4,10 +4,9 @@ DB에 영구 저장하지 않고 세션으로 임시적으로만 저장
 """
 import io
 import os
-from typing import Optional
+from typing import Optional, List
 import openai
 from dotenv import load_dotenv
-from typing import List
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -29,8 +28,14 @@ session_embeddings = {}
 # TTL 1시간(3600초)
 EMBEDDING_TTL_SECONDS = 3600
 
-
+# ----------------------- 텍스트 추출 -----------------------
 def extract_text_from_file(file_bytes: bytes, file_name: str) -> Optional[str]:
+    """
+    PDF, DOCX, 이미지(png/jpg/jpeg/bmp)에서 텍스트 추출
+    :param file_bytes: 업로드된 파일의 바이트 데이터
+    :param file_name: 파일명 (확장자 구분용)
+    :return: 추출된 텍스트 문자열 (없으면 None)
+    """
     ext = file_name.split('.')[-1].lower()
     text = None
 
@@ -50,7 +55,7 @@ def extract_text_from_file(file_bytes: bytes, file_name: str) -> Optional[str]:
         text = None
 
     if text and text.strip():
-        return text
+        return text.strip()
     return None
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
@@ -60,17 +65,24 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     :param texts: 임베딩할 텍스트 문자열 리스트
     :return: 각 텍스트별 임베딩 벡터 리스트
     """
-    response = openai.Embedding.create(
-        input=texts,
-        model="text-embedding-ada-002"
-    )
-    embeddings = [item['embedding'] for item in response['data']]
-    return embeddings
+    try:
+        response = openai.Embedding.create(
+            input=texts,
+            model="text-embedding-ada-002"
+        )
+        embeddings = [item['embedding'] for item in response['data']]
+        return embeddings
+    except Exception as e:
+        print(f"❌ 임베딩 생성 실패: {e} ❌")
+        return []
 
+# ----------------------- 세션 저장 / 로드 -----------------------
 def save_embedding_to_session(session_id: str, embedding: List[float]):
+     """세션 임시 저장"""
     session_embeddings[session_id] = (embedding, time.time())
 
 def get_embedding_from_session(session_id: str) -> Optional[List[float]]:
+    """세션에서 임베딩 불러오기 (1시간 TTL)"""
     data = session_embeddings.get(session_id)
     if not data:
         return None
