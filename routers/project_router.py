@@ -14,7 +14,7 @@ from backend.db.project_DB import (
 import traceback, os
 
 ## LLM
-from backend.llm.models import extract_text_from_file, call_llm
+from backend.LLm.models import extract_text_from_file, call_llm
 
 
 
@@ -257,3 +257,4 @@ def remove_project(project_id: int, email):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 삭제 실패: {str(e)} ❌")
+
