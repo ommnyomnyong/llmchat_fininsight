@@ -2,18 +2,13 @@
 채팅에 파일 업로드 시 해당 내용을 텍스트 추출 >> 임베딩 하여 임시 세션에 저장(1h)
 DB에 영구 저장하지 않고 세션으로 임시적으로만 저장
 """
-import io
-import os
+import io, os, time, openai
 from typing import Optional, List
-import openai
 from dotenv import load_dotenv
-
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
 
 # PDF 텍스트 추출
 from pdfminer.high_level import extract_text as extract_pdf_text
+import fitz    # PyMuPDF (정확한 PDF 텍스트 추출)
 
 # 워드(.docx) 텍스트 추출
 import docx2txt
@@ -21,6 +16,10 @@ import docx2txt
 # 이미지 OCR
 from PIL import Image
 import pytesseract
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY
 
 # 임시 세션 임베딩 저장소, {session_id: (embedding, timestamp)} 구조
 session_embeddings = {}
@@ -42,6 +41,9 @@ def extract_text_from_file(file_bytes: bytes, file_name: str) -> Optional[str]:
     try:
         if ext == "pdf":
             text = extract_pdf_text(io.BytesIO(file_bytes))
+            ## PDF 텍스트가 정확히 나오지 않으면 밑에 코드 그대로 사용.
+            # with fitz.open(stream=file_bytes, filetype="pdf") as doc: 
+            #     text = "".join([page.get_text() for page in doc])
         elif ext in ["doc", "docx"]:
             text = docx2txt.process(io.BytesIO(file_bytes))
         elif ext in ["png", "jpg", "jpeg", "bmp"]:
