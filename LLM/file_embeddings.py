@@ -81,7 +81,7 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
 # ----------------------- 세션 저장 / 로드 -----------------------
 def save_embedding_to_session(session_id: str, embedding: List[float]):
      """세션 임시 저장"""
-    session_embeddings[session_id] = (embedding, time.time())
+     session_embeddings[session_id] = (embedding, time.time())
 
 def get_embedding_from_session(session_id: str) -> Optional[List[float]]:
     """세션에서 임베딩 불러오기 (1시간 TTL)"""
