@@ -17,3 +17,6 @@ pymysql
 cryptography
 jinja2
 aiofiles
+PyMuPDF
+pillow
+apscheduler
