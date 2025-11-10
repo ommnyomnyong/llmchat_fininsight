@@ -93,12 +93,12 @@ async def upload_project_file(
             f.write(file_bytes)
 
         ## 텍스트 추출
-        text = extract_text_from_file(save_path) 
+        text = extract_text_from_file(file_bytes, file.filename) 
         if not text.strip():
             raise ValueError("❌ 텍스트 추출 실패 ❌")
         
        # 벡터화 (project_id 단위로 분리)
-        add_vectors(project_id, text)
+        add_vectors(project_id, text, file.filename)
         
         # 파일 메타데이터 DB 저장
         save_project_file(project_id, file.filename, file.content_type, file_bytes, save_path)
@@ -113,7 +113,6 @@ async def upload_project_file(
 ## ---------------------- 대화 저장 및 LLM 호출 ----------------------
 @router.post("/chat")
 async def project_chat(
-    email: str = Form(...),
     project_id: int = Form(...),
     model_name: str = Form(...),
     user_input: str = Form(...),
@@ -137,7 +136,7 @@ async def project_chat(
         
         
         # 벡터 DB에서 문맥 검색 (있으면 참고용으로 추가)
-        context = search_context(project_id, user_input)
+        context = search_context(query=user_input, project_id=project_id, top_k=3)
         context_text = f"\n\n[참고 문서 내용]\n{context}" if context else ""
 
 
@@ -166,7 +165,7 @@ async def project_chat(
 
 ## ---------------------- 프로젝트별 대화/파일/정보 불러오기 ----------------------
 @router.get("/chat/history")
-def get_chat_history(project_id: int, email: str):
+def get_chat_history(project_id: int):
 
     """
     사용자가 프로젝트를 다시 열었을 때:
@@ -174,18 +173,18 @@ def get_chat_history(project_id: int, email: str):
     """
 
     try:
-        project = get_project_info(project_id, email)
+        project = get_project_info(project_id)
         if not project:
             raise HTTPException(status_code=404, detail="❌ 프로젝트를 찾을 수 없습니다 ❌")
 
         # 파일 목록
-        files = get_project_files(project_id, email)
+        files = get_project_files(project_id)
 
         # 대화 내용 (JSON)
-        chats = get_project_chats(project_id, email, as_text=False)
+        chats = get_project_chats(project_id, as_text=False)
 
         # 임베딩 여부
-        vector_path = f"{BASE_VECTOR_DIR}/{email}/{project_id}"
+        vector_path = f"{BASE_VECTOR_DIR}/{project_id}"
         has_embedding = os.path.exists(vector_path) and len(os.listdir(vector_path)) > 0
 
         response_data = {
@@ -223,12 +222,12 @@ scheduler.start()
 
 ## ---------------------- 전체 프로젝트 목록 (최신순) ----------------------
 @router.get("/list")
-def list_projects(email: str):
+def list_projects():
     """
     프로젝트 목록을 최신순(created_at DESC)으로 반환
     """
     try:
-        projects = get_all_projects(email=email, order_by="created_at DESC")
+        projects = get_all_projects(order_by="created_at DESC")
         return JSONResponse(content=jsonable_encoder(projects))
     except Exception as e:
         traceback.print_exc()
@@ -268,6 +267,7 @@ def remove_project(project_id: int):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 삭제 실패: {str(e)} ❌")
+
 
 
 
