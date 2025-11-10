@@ -115,8 +115,9 @@ def save_chat_message(
     return {"message": "✅ 채팅 저장 완료 ✅"}
 
 
+# 채팅 리스트 가져오기 (왼쪽 사이드바 구현용)
 @router.get("/list")
-def get_chat_history(project_id: int):
+def get_chat_history(project_id: Optional[int] = None):
     chats = get_chats(project_id)
     return {"chats": chats}
 
