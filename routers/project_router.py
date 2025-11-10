@@ -14,8 +14,8 @@ from backend.db.project_DB import (
     create_project, save_project_file, save_project_chat, delete_project, get_all_projects)
 
 ## LLM
-from backend.LLm.models import extract_text_from_file, call_llm
-
+from backend.LLM.services import extract_text_from_file
+from backend.LLM.services import call_openai_model as call_llm
 
 
 router = APIRouter()
@@ -268,5 +268,6 @@ def remove_project(project_id: int):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 삭제 실패: {str(e)} ❌")
+
 
 
