@@ -280,3 +280,113 @@ def update_session_history(request: Request, session_id: str, chat_id: int, new_
     # 변경 반영
     session_histories[session_id] = chat_list
 
+
+
+
+# ----------------------------------------------
+#  통합 LLM 호출 래퍼 (project_router.py와 호환)
+# ---------------- OpenAI ----------------------
+def _call_openai_chat(model_name: str, prompt: str):
+    """OpenAI 모델 호출 (단순 응답 텍스트 반환)"""
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.7,
+        }
+
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"OpenAI Error: {response.text}")
+
+        data = response.json()
+        return data["choices"][0]["message"]["content"].strip()
+
+    except Exception as e:
+        traceback.print_exc()
+        return f"❌ OpenAI 호출 실패: {str(e)}"
+
+
+# ---------------- Gemini ----------------
+def _call_gemini(prompt: str):
+    """Gemini Flash 호출"""
+    try:
+        if not GEMINI_API_KEY:
+            raise HTTPException(status_code=500, detail="Gemini API 키가 설정되지 않았습니다.")
+
+        gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        headers = {"Content-Type": "application/json"}
+        params = {"key": GEMINI_API_KEY}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+        response = requests.post(gemini_url, headers=headers, params=params, json=payload)
+        data = response.json()
+
+        parts = data["candidates"][0]["content"]["parts"]
+        return "".join(p.get("text", "") for p in parts)
+
+    except Exception as e:
+        traceback.print_exc()
+        return f"❌ Gemini 호출 실패: {str(e)}"
+
+
+# ---------------- Grok ----------------
+def _call_grok(prompt: str):
+    """Grok 모델 호출"""
+    try:
+        headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
+        payload = {
+            "model": "grok-1",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+        }
+
+        response = requests.post("https://api.grok.ai/v1/chat/completions", headers=headers, json=payload)
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Grok API 오류: {response.text}")
+
+        data = response.json()
+        return data["choices"][0]["message"]["content"].strip()
+
+    except Exception as e:
+        traceback.print_exc()
+        return f"❌ Grok 호출 실패: {str(e)}"
+
+
+# ---------------- 통합 LLM 래퍼 ----------------
+def call_llm(model_name: str, prompt: str, context_text: str = ""):
+    """
+    project_router.py에서 통합적으로 호출되는 LLM 래퍼
+    model_name: 'openai', 'gemini', 'grok', 'deep' 중 하나
+    prompt: 사용자 입력 텍스트
+    context_text: 문서 검색 결과
+    """
+    full_prompt = f"{context_text}\n\n{prompt}" if context_text else prompt
+    model_name_lower = model_name.lower()
+
+    if "openai" in model_name_lower or "gpt" in model_name_lower:
+        return _call_openai_chat("gpt-4o", full_prompt)
+
+    elif "gemini" in model_name_lower:
+        return _call_gemini(full_prompt)
+
+    elif "grok" in model_name_lower:
+        return _call_grok(full_prompt)
+
+    elif "deep" in model_name_lower:
+        return _call_openai_chat("gpt-4o-search-preview", full_prompt)
+
+    else:
+        raise ValueError(f"❌ 지원하지 않는 모델명입니다: {model_name}")

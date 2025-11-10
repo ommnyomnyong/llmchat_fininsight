@@ -34,7 +34,7 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100):
 
 
 ## --------------------------- 벡터 추가 (임베딩 생성 및 저장) ---------------------------
-def add_vectors(project_id: int, text: str, file_name: str = None):
+def add_vectors(project_id: int, text: str):
     """
     프로젝트별 문서 텍스트를 임베딩 후 ChromaDB에 저장
     """
@@ -60,7 +60,7 @@ def add_vectors(project_id: int, text: str, file_name: str = None):
         )
 
         ## 각 청크를 ID와 함께 추가
-        ids = [f"{file_name or 'chunk'}_{uuid.uuid4()}" for _ in chunks]
+        ids = [str(uuid.uuid4()) for _ in chunks]
         db.add_texts(chunks, ids=ids)
 
         print(f"✅ 프로젝트 {project_id} 벡터 {len(chunks)}개 저장 완료 ✅")
@@ -128,4 +128,5 @@ def delete_project_vectors(project_id: int):
     except Exception as e:
         print(f"❌ 프로젝트 {project_id} 벡터 삭제 실패: ❌", e)
         traceback.print_exc()
+
 
