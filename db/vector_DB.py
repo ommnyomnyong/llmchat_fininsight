@@ -34,14 +34,14 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100):
 
 
 ## --------------------------- 벡터 추가 (임베딩 생성 및 저장) ---------------------------
-def add_vectors(email: str, project_id: int, text: str):
+def add_vectors(project_id: int, text: str, file_name: str = None):
     """
     프로젝트별 문서 텍스트를 임베딩 후 ChromaDB에 저장
     """
     
     try:
         # 프로젝트별 디렉토리
-        persist_dir = f"{CHROMA_BASE_DIR}/{email}/{project_id}"
+        persist_dir = f"{CHROMA_BASE_DIR}/{project_id}"
         os.makedirs(persist_dir, exist_ok=True)
 
         # 텍스트 분할
@@ -60,7 +60,7 @@ def add_vectors(email: str, project_id: int, text: str):
         )
 
         ## 각 청크를 ID와 함께 추가
-        ids = [str(uuid.uuid4()) for _ in chunks]
+        ids = [f"{file_name or 'chunk'}_{uuid.uuid4()}" for _ in chunks]
         db.add_texts(chunks, ids=ids)
 
         print(f"✅ 프로젝트 {project_id} 벡터 {len(chunks)}개 저장 완료 ✅")
@@ -73,11 +73,11 @@ def add_vectors(email: str, project_id: int, text: str):
 
 
 ## --------------------------- 벡터 검색 ---------------------------
-def search_context(email: str, project_id: int, query: str, top_k: int = 3):
+def search_context(project_id: int, query: str, top_k: int = 3):
     """
     프로젝트 내 문맥 검색 (질문 텍스트 반환)
     """
-    persist_dir = f"{CHROMA_BASE_DIR}/{email}/{project_id}"
+    persist_dir = os.path.join(CHROMA_BASE_DIR, str(project_id))
     
     ## 프로젝트별 벡터 저장소가 존재하지 않으면
     if not os.path.exists(persist_dir):
@@ -111,11 +111,11 @@ def search_context(email: str, project_id: int, query: str, top_k: int = 3):
 
 
 ## --------------------------- 벡터 삭제 ---------------------------
-def delete_project_vectors(email: str, project_id: int):
+def delete_project_vectors(project_id: int):
     """
     프로젝트 삭제 시 해당 프로젝트 벡터 데이터 전체 제거
     """
-    persist_dir = f"{CHROMA_BASE_DIR}/{email}/{project_id}"
+    persist_dir = f"{CHROMA_BASE_DIR}/{project_id}"
    
     try:
         if os.path.exists(persist_dir):
@@ -128,3 +128,4 @@ def delete_project_vectors(email: str, project_id: int):
     except Exception as e:
         print(f"❌ 프로젝트 {project_id} 벡터 삭제 실패: ❌", e)
         traceback.print_exc()
+
