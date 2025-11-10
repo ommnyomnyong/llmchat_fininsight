@@ -55,7 +55,7 @@ def assign_chats_to_project(chat_ids: list[int], project_id: int):
         conn.commit()
 
 ## 채팅 불러오기
-def get_chats_all(project_id: int | None = None):
+def get_chats(project_id: int | None = None):
     if project_id is None:
         # 프로젝트 할당 안 된 채팅만 조회
         query = text("""
