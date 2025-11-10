@@ -1,6 +1,6 @@
 # project_DB.py
 from sqlalchemy import text
-from backend.db.connection import project_engine
+from db.connection import project_engine
 
 
 ## projects / project_files / project_chats 테이블 생성

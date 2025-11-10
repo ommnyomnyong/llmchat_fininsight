@@ -110,3 +110,14 @@ def update_chat(chat_id: int, new_user_input: str, new_bot_output: str):
             "chat_id": chat_id
         })
         conn.commit()
+
+# (채팅 세션 관리용) 채팅 기록 최신순으로 가져오기
+def load_chat_history_from_db(session_id: str):
+    query = text("""
+        SELECT user_input, bot_output, created_at, bot_name
+        FROM chats
+        WHERE id = :session_id
+        ORDER BY created_at DESC
+    """)
+    with chat_engine.connect() as conn:
+        result = conn.execute(query, {"session_id": session_id}).fetchall()
