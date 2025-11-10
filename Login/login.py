@@ -6,8 +6,8 @@ import requests
 
 templates = Jinja2Templates(directory="templates")  # 템플릿 폴더 경로 설정
 
-GOOGLE_CLIENT_ID = "665514448533-tuc73kc73vf8rmfbknmovjjkdggu5iab.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET = "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"
+GOOGLE_CLIENT_ID = "GOOGLE_CLIENT_ID"
+GOOGLE_CLIENT_SECRET = "GOOGLE_CLIENT_SECRET"
 REDIRECT_URI = "http://localhost:3000/auth/google/callback"
 
 def render_login_page(request: Request) -> HTMLResponse:
