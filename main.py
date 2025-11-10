@@ -10,6 +10,7 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 app = FastAPI()
+app.state.session_histories = {}
 
 app.add_middleware(
     CORSMiddleware,

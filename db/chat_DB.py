@@ -9,12 +9,12 @@ def init_chat_table():
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS chats (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                project_id INT,
+                project_id INT NULL,
+                session_id VARCHAR(128) NULL,
                 user_input TEXT,
                 bot_output TEXT,
-                bot_name VARCHAR(100) NOT NULL DEFAULT 'unknown',  -- AI 모델명 저장용
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id) REFERENCES projects(id)
+                bot_name VARCHAR(100) NOT NULL DEFAULT 'unknown',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """))
             conn.commit()
@@ -24,25 +24,31 @@ def init_chat_table():
         print("❌ chats 테이블 Error! ❌", e)
 
 ## 채팅 저장 후 chat_id를 반한 >> session에도 chat_id를 동일하게 저장하기 위함
-def save_chat(project_id: int | None, user_input: str, bot_output: str, bot_name: str = 'unknown'):
-    query = text("""
-        INSERT INTO chats (project_id, user_input, bot_output, bot_name) 
-        VALUES (:project_id, :user_input, :bot_output, :bot_name)
-    """)
+def save_chat(project_id, session_id, user_input, bot_output, bot_name='unknown'):
+    # project_id가 정수로 변환 불가하면 None으로 처리
+    try:
+        cleaned_project_id = int(project_id)
+    except (TypeError, ValueError):
+        cleaned_project_id = None
+    query = text('''
+        INSERT INTO chats (project_id, session_id, user_input, bot_output, bot_name)
+        VALUES (:project_id, :session_id, :user_input, :bot_output, :bot_name)
+    ''')
     with chat_engine.connect() as conn:
         result = conn.execute(query, {
-            "project_id": project_id,
-            "user_input": user_input,
-            "bot_output": bot_output,
-            "bot_name": bot_name
+            'project_id': cleaned_project_id,
+            'session_id': session_id,
+            'user_input': user_input,
+            'bot_output': bot_output,
+            'bot_name': bot_name
         })
         conn.commit()
-        # chat_id 반환
         try:
             chat_id = result.lastrowid
         except AttributeError:
             chat_id = result.inserted_primary_key[0]
         return chat_id
+
 
 # 채팅 기록을 프로젝트에 할당
 def assign_chats_to_project(chat_ids: list[int], project_id: int):
@@ -112,12 +118,20 @@ def update_chat(chat_id: int, new_user_input: str, new_bot_output: str):
         conn.commit()
 
 # (채팅 세션 관리용) 채팅 기록 최신순으로 가져오기
-def load_chat_history_from_db(session_id: str):
-    query = text("""
-        SELECT user_input, bot_output, created_at, bot_name
+def load_chat_history_from_db(session_id):
+    query = text('''
+        SELECT id, user_input, bot_output, created_at, bot_name
         FROM chats
-        WHERE id = :session_id
-        ORDER BY created_at DESC
-    """)
+        WHERE session_id = :session_id
+        ORDER BY created_at ASC
+    ''')
     with chat_engine.connect() as conn:
-        result = conn.execute(query, {"session_id": session_id}).fetchall()
+        rows = conn.execute(query, {'session_id': session_id}).fetchall()
+    # 대화 이력 복원
+    history = []
+    for row in rows:
+        if row.user_input:
+            history.append({'id': row.id, 'role': 'user', 'content': row.user_input})
+        if row.bot_output:
+            history.append({'id': row.id, 'role': 'assistant', 'content': row.bot_output, 'bot_name': row.bot_name})
+    return history
