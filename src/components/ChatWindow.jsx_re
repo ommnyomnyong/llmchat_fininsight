@@ -1,0 +1,298 @@
+import React, { useMemo, useRef, useState } from "react";
+import { FaBrain, FaPaperPlane } from "react-icons/fa";
+import { SiOpenai, SiGooglegemini, SiX } from "react-icons/si";
+import ChatMessage from "./ChatMessage";
+
+const models = [
+  { id: "gpt", name: "ChatGPT", icon: <SiOpenai size={16} /> },
+  { id: "gemini", name: "Gemini", icon: <SiGooglegemini size={16} /> },
+  { id: "grok", name: "Grok", icon: <SiX size={16} /> },
+];
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const hh = d.getHours();
+  const mm = `${d.getMinutes()}`.padStart(2, "0");
+  const ap = hh >= 12 ? "오후" : "오전";
+  const h12 = hh % 12 || 12;
+  return `${ap} ${h12}:${mm}`;
+}
+
+function fmtYMD(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
+export default function ChatWindow({ messages: externalMessages = [], onSend }) {
+  // 🧩 내부에서도 메시지 상태 관리 (즉시 반영)
+  const [localMessages, setLocalMessages] = useState(externalMessages || []);
+  const [model, setModel] = useState("gpt");
+  const [aiOpen, setAiOpen] = useState(false);
+  const [deepResearch, setDeepResearch] = useState(false);
+  const [text, setText] = useState("");
+  const inputRef = useRef(null);
+
+  const selected = useMemo(
+    () => models.find((m) => m.id === model) || models[0],
+    [model]
+  );
+
+  // 🧩 화면에 표시할 메시지 배열 (외부 + 내부)
+  const messages = useMemo(() => {
+    // 외부 메시지 배열이 들어올 경우 병합
+    if (externalMessages.length > 0) return externalMessages;
+    return localMessages;
+  }, [externalMessages, localMessages]);
+
+  // 날짜별 그룹화
+  const grouped = useMemo(() => {
+    const g = {};
+    for (const m of messages) {
+      const key = fmtYMD(m.createdAt);
+      g[key] = g[key] || [];
+      g[key].push(m);
+    }
+    return Object.keys(g).map((k) => ({ date: k, items: g[k] }));
+  }, [messages]);
+
+  const nowISO = () => new Date().toISOString();
+
+  const handleSend = () => {
+    const t = text.trim();
+    if (!t) return;
+    const newMsg = { id: crypto.randomUUID(), role: "user", text: t, createdAt: nowISO() };
+
+    // ✅ 즉시 로컬 메시지에 반영
+    setLocalMessages((prev) => [...prev, newMsg]);
+    setText("");
+
+    // ✅ 부모에도 전달 (백엔드 연동용)
+    onSend?.(t, model, deepResearch);
+
+    // ✅ 테스트용 AI 응답 시뮬레이션 (없으면 주석 처리 가능)
+    setTimeout(() => {
+      const reply = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: `AI 응답: "${t}" 잘 들었습니다.`,
+        createdAt: nowISO(),
+      };
+      setLocalMessages((prev) => [...prev, reply]);
+    }, 800);
+  };
+
+  return (
+    <div style={{ flex: 1, display: "grid", gridTemplateRows: "auto 1fr auto", height: "100%" }}>
+      {/* 상단바 */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 14px",
+          background: "#fff",
+          borderBottom: "1px solid #e5e7eb",
+          position: "relative",
+        }}
+      >
+        {/* AI 변경 */}
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setAiOpen((v) => !v)} title="AI 변경" style={aiBtn}>
+            {selected.icon}
+          </button>
+          {aiOpen && (
+            <div style={aiMenu}>
+              {models.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => {
+                    setModel(m.id);
+                    setAiOpen(false);
+                  }}
+                  style={aiRow}
+                >
+                  {m.icon}
+                  <span>{m.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 심층 리서치 토글 */}
+        <button
+          onClick={() => setDeepResearch((v) => !v)}
+          title="심층 리서치"
+          style={{
+            ...aiBtn,
+            background: deepResearch ? "#1d4ed8" : "#f8fafc",
+            color: deepResearch ? "#fff" : "#111827",
+          }}
+        >
+          <FaBrain size={16} />
+        </button>
+      </div>
+
+      {/* 대화 영역 */}
+      <div style={{ background: "#f8fafc", overflowY: "auto" }}>
+        {grouped.length === 0 ? (
+          <div style={{ color: "#94a3b8", textAlign: "center", marginTop: 80 }}>
+            대화 내용을 여기에 표시합니다.
+          </div>
+        ) : (
+          grouped.map((g) => (
+            <div key={g.date} style={{ padding: "16px 20px" }}>
+              <div style={dateLine}>
+                  <div style={dateLineBar} />
+                  <span style={dateChip}>{g.date}</span>
+                  <div style={dateLineBar} />
+              </div>
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                {/* ✅ 중복 제거: Bubble만 사용 */}
+                {g.items.map((m) => (
+                  <Bubble key={m.id} me={m.role === "user"} time={fmtTime(m.createdAt)}>
+                    {m.text}
+                  </Bubble>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* 입력창 */}
+      <div
+        style={{
+          background: "#fff",
+          borderTop: "1px solid #e5e7eb",
+          padding: "10px 14px",
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          gap: 8,
+        }}
+      >
+        <input
+          ref={inputRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          placeholder="메시지를 입력하세요..."
+          style={{
+            width: "100%",
+            border: "1px solid #cbd5e1",
+            borderRadius: 10,
+            padding: "12px 14px",
+            outline: "none",
+            background: "#f8fafc",
+          }}
+        />
+        <button onClick={handleSend} title="전송" style={sendBtn}>
+          <FaPaperPlane size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 말풍선 */
+function Bubble({ me, time, children }) {
+  return (
+    <div style={{ display: "flex", justifyContent: me ? "flex-end" : "flex-start" }}>
+      <div
+        style={{
+          maxWidth: "64%",
+          background: me ? "#dbeafe" : "#fff",
+          color: "#0f172a",
+          border: "1px solid #e5e7eb",
+          borderRadius: 14,
+          padding: "10px 12px 6px",
+          position: "relative",
+          boxShadow: "0 2px 8px rgba(0,0,0,.05)",
+        }}
+      >
+        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{children}</div>
+        <div
+          style={{
+            fontSize: 11,
+            color: "#64748b",
+            marginTop: 6,
+            textAlign: me ? "right" : "left",
+          }}
+        >
+          {time}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 상단 UI 스타일 */
+const aiBtn = {
+  border: "1px solid #cbd5e1",
+  background: "#f8fafc",
+  borderRadius: 8,
+  padding: "7px 10px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+};
+const aiMenu = {
+  position: "absolute",
+  top: 38,
+  right: 0,
+  background: "#fff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 10,
+  boxShadow: "0 12px 30px rgba(0,0,0,.1)",
+  padding: "6px 0",
+  minWidth: 140,
+  zIndex: 30,
+};
+const aiRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "8px 12px",
+  cursor: "pointer",
+  color: "#334155",
+};
+const dateLine = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  width: "100%",
+};
+const dateLineBar = {
+  flex: 1,
+  height: 1,
+  background: "#e2e8f0",
+};
+const dateChip = {
+  border: "1px solid #e2e8f0",
+  borderRadius: 999,
+  fontSize: 12,
+  color: "#64748b",
+  background: "#fff",
+  padding: "4px 10px",
+  justifySelf: "center",
+};
+const sendBtn = {
+  border: "none",
+  background: "linear-gradient(90deg,#60a5fa,#3b82f6)",
+  color: "#fff",
+  borderRadius: 10,
+  padding: "0 14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+};
