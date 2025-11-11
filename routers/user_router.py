@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 from jose import jwt
 import requests, os
-from backend.db.user_DB import save_user
+from db.user_DB import save_user
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -71,4 +71,5 @@ def google_callback(code: str):
     ## React로 리디렉션
     redirect_url = f"http://localhost:5173/oauth-success?token={jwt_token}&email={userinfo['email']}&name={userinfo['name']}"
     return RedirectResponse(url=redirect_url)
+
 
