@@ -51,10 +51,13 @@ async def agent_call(
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
 
         # Gemini 계열은 답변이 문자열(str), 나머지는 딕셔너리(dict)
+        if model_name == "grok":
+            return ai_response         # StreamingResponse 바로 반환
+
         if model_name.startswith("gemini"):
-            answer = ai_response          # Gemini: str
+            answer = ai_response
         else:
-            answer = ai_response["answer"] if isinstance(ai_response, dict) else str(ai_response)  # 그 외: dict
+            answer = ai_response["answer"] if isinstance(ai_response, dict) else str(ai_response)
 
         # 채팅 내용 저장/수정
         if chat_id:

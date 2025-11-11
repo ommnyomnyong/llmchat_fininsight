@@ -3,13 +3,19 @@ from fastapi.responses import RedirectResponse
 from jose import jwt
 import requests
 from db.user_DB import save_user
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 router = APIRouter()
 
-GOOGLE_CLIENT_ID = "your_google_client_id"
-GOOGLE_CLIENT_SECRET = "your_google_client_secret"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = "http://localhost:8000/auth/google/callback"
 
+
+# ✅ scope 추가 (중요)
+SCOPE = "openid email profile"
 
 ## 구글 로그인 URL 요청
 @router.get("/google/login")
@@ -19,6 +25,9 @@ def google_login():
         "?response_type=code"
         f"&client_id={GOOGLE_CLIENT_ID}"
         f"&redirect_uri={REDIRECT_URI}"
+        f"&scope={SCOPE}"
+        "&access_type=offline"
+        "&prompt=consent"
     )
     return RedirectResponse(url=google_auth_endpoint)
 

@@ -24,11 +24,14 @@ for db_name in [USER_DB_NAME, PROJECT_DB_NAME, CHAT_DB_NAME]:
 
 # 각각의 엔진으로 개별 DB 연결
 user_engine = create_engine(
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{USER_DB_NAME}", echo=True
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{USER_DB_NAME}", echo=True, pool_recycle=1800,
+    pool_pre_ping=True
 )
 project_engine = create_engine(
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{PROJECT_DB_NAME}", echo=True
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{PROJECT_DB_NAME}", echo=True, pool_recycle=1800,
+    pool_pre_ping=True
 )
 chat_engine = create_engine(
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{CHAT_DB_NAME}", echo=True
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{CHAT_DB_NAME}", echo=True, pool_recycle=1800,
+    pool_pre_ping=True
 )

@@ -6,8 +6,8 @@ from routers.user_router import router as user_router
 import sys
 import asyncio
 
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 app = FastAPI()
 app.state.session_histories = {}

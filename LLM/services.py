@@ -64,6 +64,7 @@ def chat_handler(request: Request, req):
     return combined_prompt, session_id
 
 def call_openai_model(request: Request, req):
+
     session_histories = request.app.state.session_histories
     session_id = req.session_id
     prompt = req.prompt
@@ -78,13 +79,30 @@ def call_openai_model(request: Request, req):
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     payload = {
         "model": "gpt-4o",
-        "messages": session_histories[session_id]["history"],
+        "messages": [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in session_histories[session_id]["history"]
+    ],
         "max_tokens": 8192,
         "stream": True
     }
+
     response = requests.post(api_url, headers=headers, json=payload, stream=True)
+    print(f"[DEBUG] OpenAI API response status: {response.status_code}")
+    print(f"[DEBUG] OpenAI API response body: {response.text}")
+
     if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="AI 모델 호출 실패")
+        # 만약 잔액 문제/한도 초과일 때 OpenAI는 401(Unauthorized), 402(Payment Required), 429(Quota Exceeded) 혹은 400 종류로 반환함
+        if response.status_code in [401, 402, 429, 400]:
+            # 상세 오류 메시지 추출해서 알려주기
+            try:
+                err_msg = response.json().get('error', {}).get('message', '')
+            except Exception:
+                err_msg = response.text
+            raise HTTPException(status_code=response.status_code, detail=
+                f"OpenAI 호출 실패: {err_msg} (status: {response.status_code})\n비용/한도 초과, 결제문제, API키 미설정 가능성도 체크하세요.")
+        else:
+            raise HTTPException(status_code=500, detail=f"AI 모델 호출 실패: status {response.status_code}, 내용: {response.text}")
     def event_generator():
         answer = ""
         for line in response.iter_lines():
@@ -145,7 +163,6 @@ def call_gemini_model(request: Request, req):
     })
     return answer
 
-
 def call_grok_model(request: Request, req):
     session_histories = request.app.state.session_histories
     session_id = req.session_id
@@ -156,34 +173,63 @@ def call_grok_model(request: Request, req):
     combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
     chat_id_user = save_chat(session_id, combined_prompt, "", "unknown")
     session_histories[session_id]["history"].append({"id": chat_id_user, "role": "user", "content": combined_prompt})
-    api_url = "https://api.grok.ai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
+
+    # 공식 API 엔드포인트와 모델명
+    api_url = "https://api.x.ai/v1/chat/completions"
+    api_key = os.getenv("XAI_API_KEY")
+    if not api_key:
+        print("[DEBUG] XAI_API_KEY 환경변수가 설정되지 않았습니다!")
+        raise HTTPException(status_code=500, detail="Grok(xAI) API Key 미설정")
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    # 메시지 배열에서 불필요한 필드는 제외
+    messages = [
+        {"role": m["role"], "content": m["content"]}
+        for m in session_histories[session_id]["history"]
+    ]
     payload = {
-        "model": "grok-1",
-        "messages": session_histories[session_id]["history"],
-        "max_tokens": 8192,
+        "model": "grok-4",           # 최신 최상위 모델
+        "messages": messages,
+        "max_tokens": 2048,           # 필요시 조정
         "stream": True
     }
-    response = requests.post(api_url, headers=headers, json=payload, stream=True)
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="Grok API 호출 실패")
+    print("[DEBUG] 요청 URL:", api_url)
+    print("[DEBUG] 헤더:", headers)
+    print("[DEBUG] Payload:", json.dumps(payload, ensure_ascii=False)[:800])
+
+    try:
+        response = requests.post(api_url, headers=headers, json=payload, stream=True, timeout=30)
+        print("[DEBUG] 응답 Status:", response.status_code)
+        print("[DEBUG] 응답 Body:", response.text[:500])
+        if response.status_code != 200:
+            try:
+                err_json = response.json()
+            except Exception:
+                err_json = response.text
+            print("[ERROR] 상세 에러:", err_json)
+            raise HTTPException(status_code=response.status_code,
+                detail=f"Grok(xAI) API 호출 실패 (status {response.status_code}): {err_json}")
+    except requests.exceptions.RequestException as e:
+        print("[EXCEPTION] 네트워크 오류:", str(e))
+        raise HTTPException(status_code=500, detail=f"Grok(xAI) 네트워크 예외: {str(e)}")
+
     def event_generator():
         answer = ""
         for line in response.iter_lines():
             if line:
                 try:
                     json_line = json.loads(line.decode('utf-8').replace("data: ", ""))
+                    # Grok의 스트리밍 포맷은 OpenAI와 동일함
                     token = json_line['choices'][0].get('delta', {}).get('content', '')
                     answer += token
                     yield token
-                except Exception:
+                except Exception as e:
+                    print("[STREAM ERROR]", str(e))
                     continue
         chat_id_ai = save_chat(session_id, prompt, answer, "grok")
         session_histories[session_id]["history"].append({
             "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "grok"
         })
     return StreamingResponse(event_generator(), media_type="text/plain")
-
 
 def call_deep_research_model(request: Request, req):
     session_histories = request.app.state.session_histories
@@ -192,8 +238,19 @@ def call_deep_research_model(request: Request, req):
     get_or_create_session(request, session_id)
     embedding = get_embedding_from_session(session_id)
     context_text = "참고 문서 내용 포함" if embedding else ""
-    combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
-    chat_id_user = save_chat(session_id, combined_prompt, "", "unknown")
+
+    base_deep_research_prompt = (
+        "You are an AI research assistant. Use the document search results "
+        "to provide accurate and relevant answers. If the user's input lacks "
+        "necessary information, ask clarifying questions to gather more details "
+        "before answering. Base your responses strictly on available evidence "
+        "and reasoning."
+    )
+
+    # 기본 프롬프트 + 검색 결과 + 사용자 입력 결합
+    combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}" if context_text else f"{base_deep_research_prompt}\n{prompt}"
+
+    chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="unknown")
     session_histories[session_id]["history"].append({"id": chat_id_user, "role": "user", "content": combined_prompt})
     try:
         if getattr(req, "model_name", "") == "gemini-research":
@@ -217,38 +274,7 @@ def call_deep_research_model(request: Request, req):
             })
             return {"model": payload["model"], "answer": answer, "history": session_histories[session_id]["history"]}
         else:
-            api_url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-            payload = {
-                "model": "gpt-4o-search-preview",
-                "messages": session_histories[session_id]["history"],
-                "max_tokens": 8192,
-                "stream": True
-            }
-            response = requests.post(api_url, headers=headers, json=payload, stream=True, timeout=30)
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="OpenAI API call failed")
-            def event_generator():
-                answer = ""
-                for line in response.iter_lines():
-                    if line:
-                        try:
-                            line_str = line.decode('utf-8').strip()
-                            if line_str == "data: [DONE]":
-                                break
-                            if line_str.startswith("data: "):
-                                json_str = line_str[len("data: ") :]
-                                json_line = json.loads(json_str)
-                                token = json_line['choices'][0].get('delta', {}).get('content', '')
-                                answer += token
-                                yield token
-                        except Exception:
-                            continue
-                chat_id_ai = save_chat(session_id, combined_prompt, answer, "openai-research")
-                session_histories[session_id]["history"].append({
-                    "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "openai-research"
-                })
-            return StreamingResponse(event_generator(), media_type="text/plain")
+            raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
