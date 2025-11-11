@@ -1,0 +1,47 @@
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+from jose import jwt
+import requests
+
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_SECRET = ""
+REDIRECT_URI = ""
+
+@app.get("/", response_class=RedirectResponse)
+def login_page(request: Request):
+    # 기본 진입시 로그인 페이지(템플릿/html 보려면 HTMLResponse)
+    # 여기선 React에서 로그인 라우팅 대신 사용하는 경우
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.get("/auth/google/login")
+def google_login():
+    google_auth_endpoint = (
+        "https://accounts.google.com/o/oauth2/v2/auth"
+        "?response_type=code"
+        f"&client_id={GOOGLE_CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
+        "&scope=openid%20email%20profile"
+    )
+    return RedirectResponse(url=google_auth_endpoint)
+
+@app.get("/auth/google/callback")
+def google_callback(code: str):
+    # 구글에서 토큰 교환
+    token_url = "https://oauth2.googleapis.com/token"
+    data = {
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }
+    token_response = requests.post(token_url, data=data).json()
+    access_token = token_response.get("access_token")
+
+    # 인증이 끝나면 프론트엔드 React 성공페이지로 code만 전달
+    redirect_url = f"http://localhost:3000/success?code={code}"
+    return RedirectResponse(url=redirect_url)
