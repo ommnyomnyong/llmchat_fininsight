@@ -1,17 +1,17 @@
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 from jose import jwt
-import requests
-from db.user_DB import save_user
-import os
+import requests, os
+from backend.db.user_DB import save_user
 from dotenv import load_dotenv
+
 load_dotenv()
 
 router = APIRouter()
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = "http://localhost:8000/auth/google/callback"
+REDIRECT_URI = os.getenv("REDIRECT_URI")
 
 
 # ✅ scope 추가 (중요)
@@ -69,5 +69,6 @@ def google_callback(code: str):
     )
 
     ## React로 리디렉션
-    redirect_url = f"http://localhost:3000/oauth-success?token={jwt_token}"
+    redirect_url = f"http://localhost:5173/oauth-success?token={jwt_token}&email={userinfo['email']}&name={userinfo['name']}"
     return RedirectResponse(url=redirect_url)
+
