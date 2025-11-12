@@ -12,8 +12,9 @@ from typing import Optional
 ## DB 모듈
 from db.vector_DB import add_vectors, search_context, delete_project_vectors
 from db.project_DB import (
-    get_project_info, get_project_info_by_name, get_project_files, get_project_chats,
-    create_project, save_project_file, save_project_chat, delete_project, get_all_projects)
+    get_project_info, get_project_info_by_name, get_project_files, 
+    get_project_chats, create_project, save_project_file, 
+    save_project_chat, delete_project, get_all_projects, update_project_name)
 
 ## LLM
 from LLM.file_embeddings import extract_text_from_file
@@ -61,7 +62,7 @@ def create_new_project(
         
         # 프로젝트 생성
         create_project(email, project_name, description, project_purpose)
-        return {"message": f"✅ 프로젝트 '{project_name}' 생성 완료 ✅"}
+        return {"message": f"프로젝트 '{project_name}' 생성 완료"}
         
     except Exception as e:
         traceback.print_exc()
@@ -105,7 +106,7 @@ async def upload_project_file(
         # 파일 메타데이터 DB 저장
         save_project_file(project_id, file.filename, file.content_type, file_bytes, save_path)
         
-        return {"message": f"✅ 파일 '{file.filename}' 업로드 및 벡터화 완료 ✅"}
+        return {"message": f"파일 '{file.filename}' 업로드 및 벡터화 완료"}
     
     except Exception as e:
         traceback.print_exc()
@@ -206,6 +207,22 @@ def get_chat_history(project_id: int):
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 내용 불러오기 실패: {str(e)} ❌")
 
 
+## ---------------------- 프로젝트 이름 수정 ----------------------
+@router.put("/rename/{project_id}")
+def rename_project(project_id: int, data: dict):
+    new_name = data.get("project_name")
+    if not new_name:
+        raise HTTPException(status_code=400, detail="project_name is required")
+
+    success = update_project_name(project_id, new_name)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # 메시지 대신 변경된 프로젝트 정보 반환
+    return {"id": project_id, "project_name": new_name}
+
+
+
 ## ---------------------- 파일 자동 삭제 ----------------------
 def auto_delete_old_files():
     """
@@ -267,9 +284,10 @@ def remove_project(project_id: int):
         # 3. 벡터DB에서 해당 프로젝트 데이터 삭제
         delete_project_vectors(project_id)
 
-        return {"message": f"✅ 프로젝트 {project_id} 및 관련 데이터 전체 삭제 완료 ✅"}
+        return {"message": f"프로젝트 {project_id} 및 관련 데이터 전체 삭제 완료"}
 
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 삭제 실패: {str(e)} ❌")
+
 
