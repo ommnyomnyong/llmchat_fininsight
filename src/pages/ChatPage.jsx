@@ -85,12 +85,16 @@ export default function ChatPage() {
     [messages, selectedChatId]
   );
 
-  // 채팅 선택
-  const handleSelectChat = (chatId) => setSelectedChatId(chatId);
+  // 채팅 선택 시 프로젝트 선택 해제
+  const handleSelectChat = (chatId) => {
+    setSelectedChatId(chatId);
+    setSelectedProjectId(null); // ✅ 추가: 프로젝트 선택 해제
+  };
 
   // 프로젝트 선택
   const handleSelectProject = async (pid) => {
     setSelectedProjectId(pid);
+    setSelectedChatId(null); // ✅ 추가: 채팅 선택 해제
     console.log("📂 선택된 프로젝트 ID:", pid);
 
     try {
