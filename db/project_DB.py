@@ -1,6 +1,6 @@
 # project_DB.py
 from sqlalchemy import text
-from backend.db.connection import project_engine
+from db.connection import project_engine
 
 
 ## projects / project_files / project_chats 테이블 생성
@@ -184,3 +184,4 @@ def delete_project(project_id: int):
         
     except Exception as e:
         return {"error": f"❌ 삭제 중 오류 발생: {str(e)}"}
+
