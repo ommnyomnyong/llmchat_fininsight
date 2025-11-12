@@ -1,6 +1,6 @@
 # project_DB.py
 from sqlalchemy import text
-from db.connection import project_engine
+from backend.db.connection import project_engine
 
 
 ## projects / project_files / project_chats 테이블 생성
@@ -13,8 +13,9 @@ def init_project_db():
             CREATE TABLE IF NOT EXISTS projects (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 email VARCHAR(255) NOT NULL,
-                project_name VARCHAR(255),
+                project_name VARCHAR(255),            
                 description TEXT,
+                project_purpose TEXT,  
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """))
@@ -60,15 +61,17 @@ def init_project_db():
 
 
 ## ---------------------- 프로젝트 생성 ----------------------
-def create_project(project_name: str, description: str):
+def create_project(email: str, project_name: str, description: str, project_purpose: str):
     query = text("""
-        INSERT INTO projects (project_name, description)
-        VALUES (:project_name, :description)
+        INSERT INTO projects (email, project_name, description, project_purpose)
+        VALUES (:email, :project_name, :description, :project_purpose)
     """)
     with project_engine.connect() as conn:
         conn.execute(query, {
+            "email": email,
             "project_name": project_name,
-            "description": description
+            "description": description,
+            "project_purpose" : project_purpose
         })
         conn.commit()
 
@@ -94,11 +97,16 @@ def get_project_info(project_id: int):
 
 
 ## ---------------------- 프로젝트 목록 ----------------------
-def get_all_projects(order_by: str = "created_at DESC"):
-    query = text(f"SELECT * FROM projects ORDER BY {order_by}")
+def get_all_projects(email=None, order_by: str = "created_at DESC"):
+    query = "SELECT * FROM projects"
+    params = {}
+    if email:
+        query += " WHERE email = :email"
+        params["email"] = email
+    query += f" ORDER BY {order_by}"
     
     with project_engine.connect() as conn:
-        result = conn.execute(query).fetchall()
+        result = conn.execute(text(query), params).fetchall()
         
     return [dict(row._mapping) for row in result]
 
@@ -176,6 +184,3 @@ def delete_project(project_id: int):
         
     except Exception as e:
         return {"error": f"❌ 삭제 중 오류 발생: {str(e)}"}
-
-
-
