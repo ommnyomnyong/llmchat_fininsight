@@ -13,7 +13,7 @@ function GoogleLoginButton() {
         marginBottom: 18, marginTop: 20, position: "relative", cursor: "pointer",
         boxShadow: '0 2px 12px #a8def866', transition: "0.16s"
       }}
-      onClick={() => window.location.href = "http://localhost:8000/auth/google/login"}
+      onClick={() => window.location.href = "http://223.130.156.200:8000/auth/google/login"}
     >
       <img src="https://www.gstatic.com/marketing-cms/assets/images/d5/dc/cfe9ce8b4425b410b49b7f2dd3f3/g.webp=s96-fcrop64=1,00000000ffffffff-rw"
            alt="Google" style={{width: 26, marginRight: 12, display: 'inline-block'}}/>
