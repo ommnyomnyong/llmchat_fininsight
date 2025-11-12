@@ -15,7 +15,7 @@ app.state.session_histories = {}
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://223.130.156.200"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
