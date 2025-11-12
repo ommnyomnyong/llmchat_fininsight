@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 
 export default function ProjectModal({ onClose, onCreate }) {
   const ref = useRef(null);
-  const [form, setForm] = useState({ name: "", description: "", purpose: "" });
+  const [form, setForm] = useState({ project_name: "", description: "", project_purpose: "" });
+  // name, purpose -> project_name, project_purpose으로 변경 ----------------- 수정
 
   useEffect(() => {
     const h = (e) => {
@@ -19,8 +20,8 @@ export default function ProjectModal({ onClose, onCreate }) {
         <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
           <L label="프로젝트명">
             <input
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              value={form.project_name}
+              onChange={(e) => setForm((f) => ({ ...f, project_name: e.target.value }))}
               style={input}
               placeholder="예) 금융 뉴스 분석"
             />
@@ -36,8 +37,8 @@ export default function ProjectModal({ onClose, onCreate }) {
           </L>
           <L label="프로젝트 목적">
             <textarea
-              value={form.purpose}
-              onChange={(e) => setForm((f) => ({ ...f, purpose: e.target.value }))}
+              value={form.project_purpose}
+              onChange={(e) => setForm((f) => ({ ...f, project_purpose: e.target.value }))}
               style={{ ...input, minHeight: 80 }}
             />
           </L>
@@ -48,7 +49,7 @@ export default function ProjectModal({ onClose, onCreate }) {
           </button>
           <button
             onClick={() => {
-              if (!form.name.trim()) return;
+              if (!form.project_name.trim()) return;
               onCreate?.(form);
             }}
             style={btnPrimary}
