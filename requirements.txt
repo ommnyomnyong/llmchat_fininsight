@@ -4,13 +4,15 @@ python-dotenv==1.0.0
 requests==2.31.0
 pydantic>=2.0.0
 httpx
+openai>=1.2.0
+langchain-core>=1.0.4
+langchain-openai>=0.1.7
+langchain-chroma>=1.0.0
+chromadb>=0.4.22
 docx2txt==0.8
 Pillow==10.0.0
 pytesseract==0.3.10
 python-jose==3.3.0
-openai==0.27.0
-langchain-chroma==1.0.0
-langchain-core==1.0.4
 tqdm==4.67.1
 numpy
 sqlalchemy
@@ -21,7 +23,4 @@ cryptography
 jinja2
 aiofiles
 PyMuPDF
-pillow
 apscheduler
-chromadb
-langchain_openai
