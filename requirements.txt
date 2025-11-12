@@ -9,6 +9,9 @@ Pillow==10.0.0
 pytesseract==0.3.10
 python-jose==3.3.0
 openai==0.27.0
+langchain-chroma==1.0.0
+langchain-core==1.0.4
+tqdm==4.67.1
 numpy
 sqlalchemy
 pdfminer.six
