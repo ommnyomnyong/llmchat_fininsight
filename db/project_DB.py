@@ -98,18 +98,24 @@ def get_project_info(project_id: int):
 
 ## ---------------------- 프로젝트 목록 ----------------------
 def get_all_projects(email=None, order_by: str = "created_at DESC"):
-    query = "SELECT * FROM projects"
-    params = {}
-    if email:
-        query += " WHERE email = :email"
-        params["email"] = email
-    query += f" ORDER BY {order_by}"
-    
     with project_engine.connect() as conn:
-        result = conn.execute(text(query), params).fetchall()
+        if email:
+            query = text(f"SELECT * FROM projects WHERE email = :email ORDER BY {order_by}")
+            rows = conn.execute(query, {"email": email}).mappings().all()
+        else:
+            query = text(f"SELECT * FROM projects ORDER BY {order_by}")
+            rows = conn.execute(query).mappings().all()
+        return [dict(row) for row in rows]
         
     return [dict(row._mapping) for row in result]
 
+## ---------------------- 프로젝트 이름 수정 ----------------------
+def update_project_name(project_id: int, new_name: str):
+    query = text("UPDATE projects SET project_name = :new_name WHERE id = :project_id")
+    with project_engine.begin() as conn:  # 트랜잭션 자동 처리
+        result = conn.execute(query, {"new_name": new_name, "project_id": project_id})
+        success = result.rowcount > 0
+    return success
 
 
 ## ---------------------- 업로드 파일 목록 ----------------------
@@ -184,4 +190,6 @@ def delete_project(project_id: int):
         
     except Exception as e:
         return {"error": f"❌ 삭제 중 오류 발생: {str(e)}"}
+
+
 
