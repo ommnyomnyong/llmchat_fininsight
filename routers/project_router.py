@@ -7,15 +7,17 @@ from fastapi.encoders import jsonable_encoder
 import traceback, os, time
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from typing import Optional
+
 ## DB 모듈
-from db.vector_DB import add_vectors, search_context, delete_project_vectors
-from db.project_DB import (
-    get_project_info, get_project_info_by_name, get_project_files,
-    create_project, save_project_file, delete_project, get_all_projects)
+from backend.db.vector_DB import add_vectors, search_context, delete_project_vectors
+from backend.db.project_DB import (
+    get_project_info, get_project_info_by_name, get_project_files, get_project_chats,
+    create_project, save_project_file, save_project_chat, delete_project, get_all_projects)
 
 ## LLM
-from LLM.file_embeddings import extract_text_from_file
-from LLM.services import call_openai_model as call_llm
+from backend.LLM.file_embeddings import extract_text_from_file
+from backend.LLM.services import call_llm
 
 
 router = APIRouter()
@@ -28,11 +30,13 @@ os.makedirs(BASE_UPLOAD_DIR, exist_ok=True)
 os.makedirs(BASE_VECTOR_DIR, exist_ok=True)
 
 
-## 새로운 프로젝트 생성
+## ---------------------- 새로운 프로젝트 생성 ----------------------
 @router.post("/create")
 def create_new_project(
+    email: str = Form(...),     # ✅ 추가
     project_name: str = Form(...), 
-    description: str = Form("")
+    description: str = Form(""),
+    project_purpose: str = Form("")   # ✅ 목적 필드 추가
     ):
     
     """
@@ -56,7 +60,7 @@ def create_new_project(
             project_name = f"{base_name}({suffix})"
         
         # 프로젝트 생성
-        create_project(project_name, description)
+        create_project(email, project_name, description, project_purpose)
         return {"message": f"✅ 프로젝트 '{project_name}' 생성 완료 ✅"}
         
     except Exception as e:
@@ -64,16 +68,14 @@ def create_new_project(
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 생성 실패: {str(e)} ❌")
 
 
-## 파일 업로드 및 벡터화 ------pdf, docx 지원
+## ---------------------- 파일 업로드 및 벡터화 ----------------------
 @router.post("/upload-file")
 async def upload_project_file(
     project_id: int = Form(...),
     file: UploadFile = File(...)
 ):
-    
     """
-        프로젝트 내부에서 파일 업로드 시:
-            파일 저장 + 텍스트 추출 + 벡터화
+        파일 업로드 → 텍스트 추출 → 벡터화
     """
     try:
         project = get_project_info(project_id)
@@ -98,7 +100,7 @@ async def upload_project_file(
             raise ValueError("❌ 텍스트 추출 실패 ❌")
         
        # 벡터화 (project_id 단위로 분리)
-        add_vectors(project_id, text, file.filename)
+        add_vectors(project_id, text)
         
         # 파일 메타데이터 DB 저장
         save_project_file(project_id, file.filename, file.content_type, file_bytes, save_path)
@@ -181,7 +183,7 @@ def get_chat_history(project_id: int):
         files = get_project_files(project_id)
 
         # 대화 내용 (JSON)
-        chats = get_project_chats(project_id, as_text=False)
+        chats = get_project_chats(project_id)
 
         # 임베딩 여부
         vector_path = f"{BASE_VECTOR_DIR}/{project_id}"
@@ -206,6 +208,9 @@ def get_chat_history(project_id: int):
 
 ## ---------------------- 파일 자동 삭제 ----------------------
 def auto_delete_old_files():
+    """
+    일정 기간 지난 파일 자동 삭제
+    """
     now = time.time()
     for root, _, files in os.walk(BASE_UPLOAD_DIR):
         for file in files:
@@ -222,12 +227,12 @@ scheduler.start()
 
 ## ---------------------- 전체 프로젝트 목록 (최신순) ----------------------
 @router.get("/list")
-def list_projects():
+def list_projects(email: Optional[str] = None):
     """
-    프로젝트 목록을 최신순(created_at DESC)으로 반환
+    로그인한 사용자의 프로젝트 목록을 최신순으로 반환
     """
     try:
-        projects = get_all_projects(order_by="created_at DESC")
+        projects = get_all_projects(email, order_by="created_at DESC")
         return JSONResponse(content=jsonable_encoder(projects))
     except Exception as e:
         traceback.print_exc()
@@ -267,7 +272,3 @@ def remove_project(project_id: int):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 삭제 실패: {str(e)} ❌")
-
-
-
-
