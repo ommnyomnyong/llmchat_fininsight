@@ -6,6 +6,7 @@ from routers.user_router import router as user_router
 import sys
 import asyncio
 
+
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
