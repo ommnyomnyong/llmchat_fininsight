@@ -20,3 +20,4 @@ aiofiles
 PyMuPDF
 pillow
 apscheduler
+chromadb
