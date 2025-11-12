@@ -10,8 +10,6 @@ import axios from "axios";
 import AccountModal from "./AccountModal";
 import ProjectModal from "./ProjectModal";
 
-
-
 function DotMenu({ onRename, onDelete, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -21,6 +19,7 @@ function DotMenu({ onRename, onDelete, onClose }) {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [onClose]);
+
   return (
     <div
       ref={ref}
@@ -37,20 +36,11 @@ function DotMenu({ onRename, onDelete, onClose }) {
         zIndex: 20,
       }}
     >
-      <div
-        onClick={() => {
-          onRename?.();
-          onClose?.();
-        }}
-        style={rowStyle}
-      >
+      <div onClick={() => { onRename?.(); onClose?.(); }} style={rowStyle}>
         이름 변경
       </div>
       <div
-        onClick={() => {
-          onDelete?.();
-          onClose?.();
-        }}
+        onClick={() => { onDelete?.(); onClose?.(); }}
         style={{ ...rowStyle, color: "#e11d48" }}
       >
         삭제
@@ -58,6 +48,7 @@ function DotMenu({ onRename, onDelete, onClose }) {
     </div>
   );
 }
+
 const rowStyle = {
   padding: "10px 12px",
   fontSize: 14,
@@ -66,7 +57,7 @@ const rowStyle = {
   borderBottom: "1px solid #f1f5f9",
 };
 
-// ✅ 프로젝트 목록 불러오기 함수 -------------------- 수정
+// ✅ 프로젝트 목록 불러오기 함수
 const fetchProjects = async (setProjects) => {
   try {
     const email = localStorage.getItem("email");
@@ -76,55 +67,34 @@ const fetchProjects = async (setProjects) => {
     console.error("❌ 프로젝트 목록 불러오기 실패:", err);
   }
 };
-// ---------------------------------------------------
+
 export default function Sidebar({
   collapsed,
   onToggleCollapse,
-
   account,
   onSaveAccount,
-
-  // projects,
+  projects,
+  setProjects,
   chats,
-
   selectedProjectId,
   selectedChatId,
-
   onSelectProject,
   onSelectChat,
-
-  // onCreateProject,
   onRenameProject,
   onDeleteProject,
-
   onCreateChat,
   onRenameChat,
   onDeleteChat,
 }) {
+  const [openMenuKey, setOpenMenuKey] = useState(null);
   const [accOpen, setAccOpen] = useState(false);
   const [projModalOpen, setProjModalOpen] = useState(false);
-  const [openMenuKey, setOpenMenuKey] = useState(null); // 'p-{id}' | 'c-{id}'
-  const [projects, setProjects] = useState([]);
 
-  // ✅ 마운트 시 프로젝트 목록 불러오기------------------------------- 수정
+  // ✅ 마운트 시 프로젝트 목록 불러오기
   useEffect(() => {
     fetchProjects(setProjects);
-  }, []);
+  }, [setProjects]);
 
-
-  // ✅ 프로젝트 삭제 함수
-  const handleDeleteProject = async (id) => {
-    if (!window.confirm("정말 이 프로젝트를 삭제하시겠습니까?")) return;
-    try {
-      const res = await axios.delete(`/project/delete/${id}`);
-      alert(res.data.message);
-      await fetchProjects(setProjects);
-    } catch (err) {
-      console.error("❌ 프로젝트 삭제 실패:", err);
-      alert("프로젝트 삭제 중 오류가 발생했습니다.");
-    }
-  };
-// ------------------------------------------------------------------
   return (
     <aside
       style={{
@@ -168,7 +138,6 @@ export default function Sidebar({
             <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 10 }}>
               계정
             </div>
-
             <div
               style={{
                 display: "flex",
@@ -180,7 +149,6 @@ export default function Sidebar({
                 padding: "8px 10px",
               }}
             >
-              {/* 계정 정보 클릭 시 모달 열기 */}
               <button
                 onClick={() => setAccOpen(true)}
                 style={{
@@ -201,8 +169,6 @@ export default function Sidebar({
                   </div>
                 </div>
               </button>
-
-              {/* ✅ 로그아웃 버튼 (오른쪽 끝) */}
               <button
                 onClick={() => {
                   localStorage.removeItem("token");
@@ -234,7 +200,7 @@ export default function Sidebar({
               title="프로젝트"
               onPlus={() => setProjModalOpen(true)}
             />
-            {!projects || projects.length === 0 ? (       // 수정
+            {!projects || projects.length === 0 ? (
               <Empty text="아직 생성된 프로젝트가 없습니다" />
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -248,12 +214,34 @@ export default function Sidebar({
                     menu={
                       openMenuKey === `p-${p.id}` && (
                         <DotMenu
-                          onRename={() => {
+                          onRename={async () => {
                             const name = prompt("새 이름");
-                            if (name?.trim())
-                              onRenameProject?.(p.id, { name: name.trim() });
+                            if (!name?.trim()) return;
+                            const newName = name.trim();
+                            try {
+                              // ✅ UI 즉시 반영
+                              setProjects(prev =>
+                                prev.map(x =>
+                                  x.id === p.id ? { ...x, project_name: newName } : x
+                                )
+                              );
+                              await axios.put(`/project/rename/${p.id}`, { project_name: newName });
+                              await fetchProjects(setProjects);
+                            } catch (err) {
+                              console.error("❌ 이름 변경 실패:", err);
+                            }
                           }}
-                          onDelete={() => onDeleteProject?.(p.id)}
+                          onDelete={async () => {
+                            if (!window.confirm("정말 삭제하시겠습니까?")) return;
+                            try {
+                              // ✅ UI 즉시 반영
+                              setProjects(prev => prev.filter(x => x.id !== p.id));
+                              await axios.delete(`/project/delete/${p.id}`);
+                              await fetchProjects(setProjects);
+                            } catch (err) {
+                              console.error("❌ 프로젝트 삭제 실패:", err);
+                            }
+                          }}
                           onClose={() => setOpenMenuKey(null)}
                         />
                       )
@@ -325,32 +313,29 @@ export default function Sidebar({
             />
           )}
           {projModalOpen && (
-          <ProjectModal
-            onClose={() => setProjModalOpen(false)}
-            onCreate={async (form) => {
-              try {
-                const email = localStorage.getItem("email"); // 로그인 시 저장된 이메일
-
-                const formData = new FormData();
-                formData.append("email", email);
-                formData.append("project_name", form.project_name);
-                formData.append("description", form.description);
-                formData.append("project_purpose", form.project_purpose);
-
-                const res = await axios.post("/project/create", formData, {
-                  headers: { "Content-Type": "multipart/form-data" },
-                });
-
-                alert(res.data.message);
-                await fetchProjects(setProjects); // ✅ 생성 후 갱신
-                setProjModalOpen(false);
-              } catch (err) {
-                console.error("❌ 프로젝트 생성 실패:", err);
-                alert("프로젝트 생성 중 오류가 발생했습니다.");
-              }
-            }}
-          />
-        )}
+            <ProjectModal
+              onClose={() => setProjModalOpen(false)}
+              onCreate={async (form) => {
+                try {
+                  const email = localStorage.getItem("email");
+                  const formData = new FormData();
+                  formData.append("email", email);
+                  formData.append("project_name", form.project_name);
+                  formData.append("description", form.description);
+                  formData.append("project_purpose", form.project_purpose);
+                  const res = await axios.post("/project/create", formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                  });
+                  console.log("✅ 생성:", res.data);
+                  await fetchProjects(setProjects);
+                  setProjModalOpen(false);
+                } catch (err) {
+                  console.error("❌ 프로젝트 생성 실패:", err);
+                  alert("프로젝트 생성 중 오류 발생");
+                }
+              }}
+            />
+          )}
         </>
       )}
     </aside>
@@ -436,7 +421,6 @@ function Empty({ text }) {
 
 function ItemRow({ icon, label, active, onClick, onOpenMenu, menu }) {
   const ref = useRef(null);
-  // 외부 클릭 닫기
   useEffect(() => {
     const h = (e) => {
       if (ref.current && !ref.current.contains(e.target)) {
