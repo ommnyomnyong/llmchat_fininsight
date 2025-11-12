@@ -21,3 +21,6 @@ PyMuPDF
 pillow
 apscheduler
 chromadb
+langchain-chroma==1.0.0
+langchain-core==1.0.4
+tqdm==4.67.1
