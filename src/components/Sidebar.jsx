@@ -6,8 +6,11 @@ import {
   FiPlus,
 } from "react-icons/fi";
 import { BsChevronLeft, BsChevronRight } from "react-icons/bs";
+import axios from "axios";
 import AccountModal from "./AccountModal";
 import ProjectModal from "./ProjectModal";
+
+
 
 function DotMenu({ onRename, onDelete, onClose }) {
   const ref = useRef(null);
@@ -63,6 +66,17 @@ const rowStyle = {
   borderBottom: "1px solid #f1f5f9",
 };
 
+// ✅ 프로젝트 목록 불러오기 함수 -------------------- 수정
+const fetchProjects = async (setProjects) => {
+  try {
+    const email = localStorage.getItem("email");
+    const res = await axios.get(`/project/list?email=${email}`);
+    setProjects(res.data);
+  } catch (err) {
+    console.error("❌ 프로젝트 목록 불러오기 실패:", err);
+  }
+};
+// ---------------------------------------------------
 export default function Sidebar({
   collapsed,
   onToggleCollapse,
@@ -70,7 +84,7 @@ export default function Sidebar({
   account,
   onSaveAccount,
 
-  projects,
+  // projects,
   chats,
 
   selectedProjectId,
@@ -79,7 +93,7 @@ export default function Sidebar({
   onSelectProject,
   onSelectChat,
 
-  onCreateProject,
+  // onCreateProject,
   onRenameProject,
   onDeleteProject,
 
@@ -90,7 +104,27 @@ export default function Sidebar({
   const [accOpen, setAccOpen] = useState(false);
   const [projModalOpen, setProjModalOpen] = useState(false);
   const [openMenuKey, setOpenMenuKey] = useState(null); // 'p-{id}' | 'c-{id}'
+  const [projects, setProjects] = useState([]);
 
+  // ✅ 마운트 시 프로젝트 목록 불러오기------------------------------- 수정
+  useEffect(() => {
+    fetchProjects(setProjects);
+  }, []);
+
+
+  // ✅ 프로젝트 삭제 함수
+  const handleDeleteProject = async (id) => {
+    if (!window.confirm("정말 이 프로젝트를 삭제하시겠습니까?")) return;
+    try {
+      const res = await axios.delete(`/project/delete/${id}`);
+      alert(res.data.message);
+      await fetchProjects(setProjects);
+    } catch (err) {
+      console.error("❌ 프로젝트 삭제 실패:", err);
+      alert("프로젝트 삭제 중 오류가 발생했습니다.");
+    }
+  };
+// ------------------------------------------------------------------
   return (
     <aside
       style={{
@@ -130,69 +164,69 @@ export default function Sidebar({
       {!collapsed && (
         <>
           {/* 계정 */}
-<section style={{ marginTop: 36, marginBottom: 18 }}>
-  <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 10 }}>
-    계정
-  </div>
+          <section style={{ marginTop: 36, marginBottom: 18 }}>
+            <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 10 }}>
+              계정
+            </div>
 
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      background: "#fff",
-      border: "1px solid #cbd5e1",
-      borderRadius: 10,
-      padding: "8px 10px",
-    }}
-  >
-    {/* 계정 정보 클릭 시 모달 열기 */}
-    <button
-      onClick={() => setAccOpen(true)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        background: "transparent",
-        border: "none",
-        cursor: "pointer",
-        flex: 1,
-      }}
-    >
-      <Avatar name={account?.name} url={account?.profileUrl} />
-      <div style={{ textAlign: "left" }}>
-        <div style={{ fontWeight: 700 }}>{account?.name || "내 계정 보기"}</div>
-        <div style={{ fontSize: 12, color: "#64748b" }}>
-          {account.googleEmail || "구글 계정 미연결"}
-        </div>
-      </div>
-    </button>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#fff",
+                border: "1px solid #cbd5e1",
+                borderRadius: 10,
+                padding: "8px 10px",
+              }}
+            >
+              {/* 계정 정보 클릭 시 모달 열기 */}
+              <button
+                onClick={() => setAccOpen(true)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  flex: 1,
+                }}
+              >
+                <Avatar name={account?.name} url={account?.profileUrl} />
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontWeight: 700 }}>{account?.name || "내 계정 보기"}</div>
+                  <div style={{ fontSize: 12, color: "#64748b" }}>
+                    {account.googleEmail || "구글 계정 미연결"}
+                  </div>
+                </div>
+              </button>
 
-    {/* ✅ 로그아웃 버튼 (오른쪽 끝) */}
-    <button
-      onClick={() => {
-        localStorage.removeItem("token");
-        localStorage.removeItem("email");
-        localStorage.removeItem("name");
-        window.location.href = "/";
-      }}
-      title="로그아웃"
-      style={{
-        background: "#ef4444",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        padding: "4px 10px",
-        fontSize: "13px",
-        fontWeight: 600,
-        cursor: "pointer",
-        marginLeft: "9px",
-      }}
-    >
-      Out
-    </button>
-  </div>
-</section>
+              {/* ✅ 로그아웃 버튼 (오른쪽 끝) */}
+              <button
+                onClick={() => {
+                  localStorage.removeItem("token");
+                  localStorage.removeItem("email");
+                  localStorage.removeItem("name");
+                  window.location.href = "/";
+                }}
+                title="로그아웃"
+                style={{
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "4px 10px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  marginLeft: "9px",
+                }}
+              >
+                OUT
+              </button>
+            </div>
+          </section>
 
           {/* 프로젝트 */}
           <section>
@@ -209,7 +243,7 @@ export default function Sidebar({
                     key={p.id}
                     active={selectedProjectId === p.id}
                     icon={<FiFolder color="#eab308" />}
-                    label={p.name}
+                    label={p.project_name}
                     onClick={() => onSelectProject?.(p.id)}
                     menu={
                       openMenuKey === `p-${p.id}` && (
@@ -291,14 +325,32 @@ export default function Sidebar({
             />
           )}
           {projModalOpen && (
-            <ProjectModal
-              onClose={() => setProjModalOpen(false)}
-              onCreate={(data) => {
-                onCreateProject?.(data);
+          <ProjectModal
+            onClose={() => setProjModalOpen(false)}
+            onCreate={async (form) => {
+              try {
+                const email = localStorage.getItem("email"); // 로그인 시 저장된 이메일
+
+                const formData = new FormData();
+                formData.append("email", email);
+                formData.append("project_name", form.project_name);
+                formData.append("description", form.description);
+                formData.append("project_purpose", form.project_purpose);
+
+                const res = await axios.post("/project/create", formData, {
+                  headers: { "Content-Type": "multipart/form-data" },
+                });
+
+                alert(res.data.message);
+                await fetchProjects(setProjects); // ✅ 생성 후 갱신
                 setProjModalOpen(false);
-              }}
-            />
-          )}
+              } catch (err) {
+                console.error("❌ 프로젝트 생성 실패:", err);
+                alert("프로젝트 생성 중 오류가 발생했습니다.");
+              }
+            }}
+          />
+        )}
         </>
       )}
     </aside>
