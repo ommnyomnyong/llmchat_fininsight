@@ -256,14 +256,12 @@ def call_deep_research_model(request: Request, req):
     try:
         if getattr(req, "model_name", "") == "gemini-research":
             api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
-            headers = {"Authorization": f"Bearer {GEMINI_API_KEY}"}
+            headers = {"Content-Type": "application/json"}
+            params = {"key": GEMINI_API_KEY}  # 쿼리 스트링 인증!
             payload = {
-                "input": combined_prompt,
-                "model": "gemini-2.5-pro",
-                "tools": [{"type": "web_search_preview"}],
-                "session_id": session_id
+                "contents": [{"parts": [{"text": combined_prompt}]}]
             }
-            response = requests.post(api_url, headers=headers, json=payload, timeout=15)
+            response = requests.post(api_url, headers=headers, params=params, json=payload, timeout=15)
             response.raise_for_status()
             result = response.json()
             if "error" in result:
