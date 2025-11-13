@@ -34,13 +34,17 @@ async def agent_call(
                 return "죄송합니다. 파일을 확인할 수 없습니다."
         new_prompt = f"{text_from_file}\n{prompt}" if text_from_file else prompt
 
-        req = ModelRequest(
-            session_id=session_id, prompt=new_prompt,
-            project_id=project_id, model_name=model_name
-        )
-
+        # 모델명 강제변환 (심층리서치 요청시에)
         if model_name in ["openai-research", "grok-research"]:
             model_name = "gemini-research"
+
+        # ModelRequest 객체 생성 (반드시 변환된 model_name을 넣음)
+        req = ModelRequest(
+            session_id=session_id,
+            prompt=new_prompt,
+            project_id=project_id,
+            model_name=model_name
+        )
 
         if model_name == "openai":
             ai_response = call_openai_model(request, req)
@@ -52,16 +56,10 @@ async def agent_call(
             ai_response = call_deep_research_model(request, req)
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
-        req = ModelRequest(
-        session_id=session_id,
-        prompt=new_prompt,
-        project_id=project_id,
-        model_name=model_name  # 반드시 위 변환된 값을 전달
-    )
 
         # Gemini 계열은 답변이 문자열(str), 나머지는 딕셔너리(dict)
         if model_name == "grok":
-            return ai_response         # StreamingResponse 바로 반환
+            return ai_response  # StreamingResponse 바로 반환
 
         if model_name.startswith("gemini"):
             answer = ai_response
@@ -72,12 +70,8 @@ async def agent_call(
         if chat_id:
             update_session_history(session_id, chat_id, new_prompt, answer)
         print('[DEBUG] session_histories[session_id]:', session_histories.get(session_id))
-        print('[DEBUG] chat_id:', chat_id)  # 넘어온 값
-        # else:
-        #     update_session_history(session_id, None, new_prompt, answer)
+        print('[DEBUG] chat_id:', chat_id)
 
-        # # 세션 기록 최신화 - 여기서도 answer(str)로 통일해서 넘겨야 오류 없음
-        # update_session_history(session_id, chat_id, new_prompt, answer)
         return answer
     except Exception as e:
         import traceback
