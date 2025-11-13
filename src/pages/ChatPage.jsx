@@ -28,25 +28,24 @@ export default function ChatPage() {
 
 //------------------------------------------------------- 추가
   useEffect(() => {
-  const token = localStorage.getItem("token");
-  const email = localStorage.getItem("email");
-  const name = localStorage.getItem("name");
+  // const token = localStorage.getItem("token");
+  // const email = localStorage.getItem("email");
+  // const name = localStorage.getItem("name");
 
-  if (token && email) {
-    // ✅ axios에 인증 헤더 설정
-    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
-    // ✅ 사용자 정보 반영
-    setAccount((prev) => ({
-      ...prev,
-      name: name || prev.name,
-      googleEmail: email,
-    }));
-
-    console.log("✅ 로그인된 사용자:", name, email);
-  } else {
-    navigate("/"); // 로그인 안된 경우 홈으로
-  }
+  // if (token && email) {
+  //   // ✅ axios에 인증 헤더 설정
+  //   axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  //   // ✅ 사용자 정보 반영
+  //   setAccount((prev) => ({
+  //     ...prev,
+  //     name: name || prev.name,
+  //     googleEmail: email,
+  //   }));
+  //   console.log("✅ 로그인된 사용자:", name, email);
+  // } else {
+  //   navigate("/"); // 로그인 안된 경우 홈으로
+  // }
+  // 인증 완전 패스 (주석처리만 하고, 아무 동작도 넣지 않아도 됨)
 }, [navigate]);
 //-------------------------------------------------------
 
