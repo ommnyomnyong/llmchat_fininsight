@@ -255,7 +255,7 @@ def call_deep_research_model(request: Request, req):
     session_histories[session_id]["history"].append({"id": chat_id_user, "role": "user", "content": combined_prompt})
     try:
         if getattr(req, "model_name", "") == "gemini-research":
-            api_url = "https://api.gemini.ai/v1/responses"
+            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
             headers = {"Authorization": f"Bearer {GEMINI_API_KEY}"}
             payload = {
                 "input": combined_prompt,
