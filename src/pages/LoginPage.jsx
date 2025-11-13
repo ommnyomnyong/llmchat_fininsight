@@ -14,8 +14,11 @@ function GoogleLoginButton() {
         boxShadow: '0 2px 12px #a8def866', transition: "0.16s"
       }}
       onClick={() => {
-      window.location.href = "http://223.130.156.200:8000/auth/google/login";
-    }}
+        // 기존 리디렉션 요청은 주석처리
+        // window.location.href = "http://223.130.156.200:8000/auth/google/login";
+        // 바로 채팅 화면으로 이동
+        navigate("/chat");
+      }}
     >
       <img src="https://www.gstatic.com/marketing-cms/assets/images/d5/dc/cfe9ce8b4425b410b49b7f2dd3f3/g.webp=s96-fcrop64=1,00000000ffffffff-rw"
            alt="Google" style={{width: 26, marginRight: 12, display: 'inline-block'}}/>
