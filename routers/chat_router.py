@@ -39,13 +39,16 @@ async def agent_call(
             project_id=project_id, model_name=model_name
         )
 
+        if model_name in ["openai-research", "grok-research"]:
+            model_name = "gemini-research"
+
         if model_name == "openai":
             ai_response = call_openai_model(request, req)
         elif model_name == "gemini":
             ai_response = call_gemini_model(request, req)
         elif model_name == "grok":
             ai_response = call_grok_model(request, req)
-        elif model_name in ["openai-research", "gemini-research"]:
+        elif model_name == "gemini-research":
             ai_response = call_deep_research_model(request, req)
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
