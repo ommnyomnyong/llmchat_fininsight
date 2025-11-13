@@ -14,9 +14,9 @@ function GoogleLoginButton() {
         boxShadow: '0 2px 12px #a8def866', transition: "0.16s"
       }}
       onClick={() => {
-        console.log('로그인 버튼 클릭!');
-        window.location.href = "http://223.130.156.200:8000/auth/google/login";
-      }}
+      alert('버튼이 눌렸어요!');
+      window.location.href = "http://223.130.156.200:8000/auth/google/login";
+    }}
     >
       <img src="https://www.gstatic.com/marketing-cms/assets/images/d5/dc/cfe9ce8b4425b410b49b7f2dd3f3/g.webp=s96-fcrop64=1,00000000ffffffff-rw"
            alt="Google" style={{width: 26, marginRight: 12, display: 'inline-block'}}/>
