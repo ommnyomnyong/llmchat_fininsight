@@ -1,8 +1,9 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-// import Login from "react-login-page";
 
 function GoogleLoginButton() {
+  // useNavigate를 반드시 내부에서 선언!
+  const navigate = useNavigate();
   return (
     <button
       style={{
@@ -27,11 +28,10 @@ function GoogleLoginButton() {
   );
 }
 
-
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  // ✅ 자동 로그인 유지
+  // ✅ 자동 로그인 유지 (기존 로직 유지)
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
@@ -40,8 +40,6 @@ export default function LoginPage() {
     }
   }, [navigate]);
 
-
-// function App() {
   return (
     <div style={{
       minHeight: "100vh", width:"100vw", background: "linear-gradient(140deg,#e9f7ff 60%, #f6f7fe 100%)",
@@ -76,43 +74,13 @@ export default function LoginPage() {
           textAlign: "center", fontWeight: 800, color: "#284e93",
           letterSpacing: "-1.2px", marginBottom: 8, fontSize: "1.28em"
         }}>로그인</h2>
-
         <GoogleLoginButton />
         {/* 구분선 */}
         <div style={{
           textAlign: "center", color: "#afd2e8", fontWeight: 500,
           margin: "19px 0 20px 0", letterSpacing: "0.7px"
         }}>Welcome LLM Chat</div>
-        {/* <Login
-          onLogin={(e,pw)=>console.log(e,pw)}
-          buttonText="이메일로 로그인"
-          inputNames={{ username: "이메일", password: "비밀번호" }}
-          usernameType="email"
-          usernameInputProps={{
-            placeholder: "이메일",
-            style: {
-              borderRadius: 8, padding: "9px 13px", background:"#f6fbff", color:"#245",
-              border: "1.4px solid #b8e4fd", marginTop:4, fontWeight:600
-            }
-          }}
-          passwordInputProps={{
-            placeholder: "비밀번호",
-            style: {
-              borderRadius: 8, padding: "9px 13px", background:"#f6fbff", color:"#245",
-              border: "1.4px solid #b8e4fd", marginTop:8, fontWeight:600
-            }
-          }}
-          buttonProps={{
-            style: {
-              background: "linear-gradient(90deg,#7dd2fb 22%,#4ca2fd 78%)", color: "#fff",
-              borderRadius:"10px", padding: "11px 0", marginTop: "10px",
-              fontWeight:700, fontSize: "1.1em", boxShadow:"0 2px 14px #88e9fa86"
-            }
-          }}
-        /> */}
-        {/* 회원가입 안내 완전 제거 */}
       </div>
     </div>
   );
 }
-// export default App;
