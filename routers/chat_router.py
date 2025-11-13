@@ -52,6 +52,12 @@ async def agent_call(
             ai_response = call_deep_research_model(request, req)
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
+        req = ModelRequest(
+        session_id=session_id,
+        prompt=new_prompt,
+        project_id=project_id,
+        model_name=model_name  # 반드시 위 변환된 값을 전달
+    )
 
         # Gemini 계열은 답변이 문자열(str), 나머지는 딕셔너리(dict)
         if model_name == "grok":
