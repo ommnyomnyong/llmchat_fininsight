@@ -132,7 +132,7 @@ def call_gemini_model(request: Request, req):
     chat_id_user = save_chat(session_id, combined_prompt, "", "unknown")
     session_histories[session_id]["history"].append({"id": chat_id_user, "role": "user", "content": combined_prompt})
 
-    gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
     headers = {"Content-Type": "application/json"}
     params = {"key": GEMINI_API_KEY}
     payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
