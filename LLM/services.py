@@ -129,7 +129,13 @@ def call_gemini_model(request: Request, req):
     embedding = get_embedding_from_session(session_id)
     context_text = "참고 문서 내용 포함" if embedding else ""
     combined_prompt = f"{context_text}\n{prompt}" if context_text else prompt
-    chat_id_user = save_chat(session_id, combined_prompt, "", "unknown")
+    chat_id_user = chat_id_user = save_chat(
+                                    project_id=None,
+                                    session_id=session_id,
+                                    user_input=combined_prompt,
+                                    bot_output="",
+                                    bot_name="unknown"
+                                )
     session_histories[session_id]["history"].append({"id": chat_id_user, "role": "user", "content": combined_prompt})
 
     gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
