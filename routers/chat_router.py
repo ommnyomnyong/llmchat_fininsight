@@ -69,7 +69,7 @@ async def agent_call(
 
         # # 세션 기록 최신화 - 여기서도 answer(str)로 통일해서 넘겨야 오류 없음
         # update_session_history(session_id, chat_id, new_prompt, answer)
-        return {"answer": answer}
+        return answer
     except Exception as e:
         import traceback
         traceback_str = ''.join(traceback.format_exception(None, e, e.__traceback__))
