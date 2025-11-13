@@ -232,6 +232,55 @@ def call_grok_model(request: Request, req):
     return StreamingResponse(event_generator(), media_type="text/plain")
 
 
+def call_deep_research_model(request: Request, req):
+    session_histories = request.app.state.session_histories
+    session_id = req.session_id
+    prompt = req.prompt
+    get_or_create_session(request, session_id)
+    embedding = get_embedding_from_session(session_id)
+    context_text = "참고 문서 내용 포함" if embedding else ""
+
+    base_deep_research_prompt = (
+        "You are an AI research assistant. Use the document search results "
+        "to provide accurate and relevant answers. If the user's input lacks "
+        "necessary information, ask clarifying questions to gather more details "
+        "before answering. Base your responses strictly on available evidence "
+        "and reasoning."
+    )
+
+    # 기본 프롬프트 + 검색 결과 + 사용자 입력 결합
+    combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}" if context_text else f"{base_deep_research_prompt}\n{prompt}"
+
+    chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="unknown")
+    session_histories[session_id]["history"].append({"id": chat_id_user, "role": "user", "content": combined_prompt})
+    try:
+        if getattr(req, "model_name", "") == "gemini-research":
+            api_url = "https://api.gemini.ai/v1/responses"
+            headers = {"Authorization": f"Bearer {GEMINI_API_KEY}"}
+            payload = {
+                "input": combined_prompt,
+                "model": "gemini-2.5-pro",
+                "tools": [{"type": "web_search_preview"}],
+                "session_id": session_id
+            }
+            response = requests.post(api_url, headers=headers, json=payload, timeout=15)
+            response.raise_for_status()
+            result = response.json()
+            if "error" in result:
+                raise HTTPException(status_code=500, detail=f"Gemini API error: {result['error']}")
+            answer = result.get("output_text") or (result.get("output", [{}])[0].get("text") if "output" in result else "No response.")
+            chat_id_ai = save_chat(session_id, combined_prompt, answer, "gemini-research")
+            session_histories[session_id]["history"].append({
+                "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "gemini-research"
+            })
+            return answer  # 수정: 값만 반환!
+        else:
+            raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
+
+
 def update_session_history(request: Request, session_id: str, chat_id: int, new_user_input: str, new_bot_output: str):
     session_histories = request.app.state.session_histories
     if session_id not in session_histories:
