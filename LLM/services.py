@@ -272,12 +272,13 @@ def call_deep_research_model(request: Request, req):
             session_histories[session_id]["history"].append({
                 "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "gemini-research"
             })
-            return {"model": payload["model"], "answer": answer, "history": session_histories[session_id]["history"]}
+            return answer  # <-- answer 값만 반환하도록 수정
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
+
 
 
 def update_session_history(request: Request, session_id: str, chat_id: int, new_user_input: str, new_bot_output: str):
@@ -357,10 +358,8 @@ def _call_gemini(prompt: str):
 
         response = requests.post(gemini_url, headers=headers, params=params, json=payload)
         data = response.json()
-
         parts = data["candidates"][0]["content"]["parts"]
         return "".join(p.get("text", "") for p in parts)
-
     except Exception as e:
         traceback.print_exc()
         return f"❌ Gemini 호출 실패: {str(e)}"
