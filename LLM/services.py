@@ -267,7 +267,7 @@ def call_deep_research_model(request: Request, req):
             if "error" in result:
                 raise HTTPException(status_code=500, detail=f"Gemini API error: {result['error']}")
             answer = result.get("output_text") or (result.get("output", [{}])[0].get("text") if "output" in result else "No response.")
-            chat_id_ai = save_chat(session_id, combined_prompt, answer, "gemini-research")
+            chat_id_ai = save_chat(project_id=None, session_id=session_id, user_input=combined_prompt, bot_output=answer, bot_name="gemini-research")
             session_histories[session_id]["history"].append({
                 "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "gemini-research"
             })
