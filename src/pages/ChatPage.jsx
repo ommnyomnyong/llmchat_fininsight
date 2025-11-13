@@ -54,7 +54,7 @@ export default function ChatPage() {
   useEffect(() => {
     // 실제 로그인된 사용자 이메일로 교체 가능
     const email = account.googleEmail || "test@example.com";
-    axios.get(`http://127.0.0.1:8000/project/list?email=${email}`)
+    axios.get(`http://223.130.156.200:8000/project/list?email=${email}`)
       .then((res) => {
         if (!res.data.new_user) {
           setProjects(res.data.projects);
@@ -94,7 +94,7 @@ export default function ChatPage() {
     setSelectedChatId(null);
     console.log("📂 선택된 프로젝트 ID:", pid);
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/chat/list?project_id=${pid}`);
+      const res = await axios.get(`http://223.130.156.200:8000/chat/list?project_id=${pid}`);
       const chatsFromDB = res.data.chats || [];
       console.log("💬 프로젝트별 채팅 불러오기:", chatsFromDB);
       // 백엔드의 chat 데이터 형식에 맞게 messages로 변환
@@ -121,10 +121,10 @@ export default function ChatPage() {
       formData.append("email", email);
       formData.append("project_name", data.name);
       formData.append("description", data.description || "");
-      const res = await axios.post("http://127.0.0.1:8000/project/create", formData);
+      const res = await axios.post("http://223.130.156.200:8000/project/create", formData);
       console.log("📁 프로젝트 생성 결과:", res.data);
       // 생성 후 목록 갱신
-      const listRes = await axios.get(`http://127.0.0.1:8000/project/list?email=${email}`);
+      const listRes = await axios.get(`http://223.130.156.200:8000/project/list?email=${email}`);
       if (!listRes.data.new_user) {
         setProjects(listRes.data.projects);
       }
@@ -136,7 +136,7 @@ export default function ChatPage() {
   const renameProject = (id, patch) =>
     setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   const deleteProject = async (id) => {
-    await axios.delete(`http://127.0.0.1:8000/project/delete?project_id=${id}`);
+    await axios.delete(`http://223.130.156.200:8000/project/delete?project_id=${id}`);
     setProjects(prev => prev.filter(p => p.id !== id));
   };
 
@@ -225,7 +225,7 @@ export default function ChatPage() {
       formData.append("session_id", chatId);
       formData.append("prompt", text);
       if (selectedProjectId) formData.append("project_id", selectedProjectId);
-      const response = await fetch(`http://127.0.0.1:8000/chat/agent-call/${modelName}`, {
+      const response = await fetch(`http://223.130.156.200:8000/chat/agent-call/${modelName}`, {
         method: "POST",
         body: formData,
       });
