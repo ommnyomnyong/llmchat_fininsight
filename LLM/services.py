@@ -247,36 +247,77 @@ def call_deep_research_model(request: Request, req):
         "before answering. Base your responses strictly on available evidence "
         "and reasoning."
     )
-
-    # 기본 프롬프트 + 검색 결과 + 사용자 입력 결합
     combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}" if context_text else f"{base_deep_research_prompt}\n{prompt}"
 
+    # DB 저장: 사용자 요청
     chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="unknown")
     session_histories[session_id]["history"].append({"id": chat_id_user, "role": "user", "content": combined_prompt})
+
     try:
         if getattr(req, "model_name", "") == "gemini-research":
             api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
             headers = {"Content-Type": "application/json"}
-            params = {"key": GEMINI_API_KEY}  # 쿼리 스트링 인증!
+            params = {"key": GEMINI_API_KEY}
             payload = {
                 "contents": [{"parts": [{"text": combined_prompt}]}]
             }
             response = requests.post(api_url, headers=headers, params=params, json=payload, timeout=15)
-            response.raise_for_status()
-            result = response.json()
-            if "error" in result:
-                raise HTTPException(status_code=500, detail=f"Gemini API error: {result['error']}")
-            answer = result.get("output_text") or (result.get("output", [{}])[0].get("text") if "output" in result else "No response.")
+            try:
+                response.raise_for_status()
+                result = response.json()
+                print("[DEBUG] Gemini API RESPONSE:", result)  # 전체 body 출력
+                error_msg = None
+                # 비용/쿼터 관련 디버깅
+                if "usageInfo" in result:
+                    print("[DEBUG] Usage info:", result["usageInfo"])
+                if "quotaExceeded" in result:
+                    print("[DEBUG] Quota exceeded:", result["quotaExceeded"])
+                    error_msg = "API 사용량(비용/쿼터) 초과입니다. 구글 콘솔에서 확인 요망."
+                # 일반 에러 메시지
+                if "error" in result:
+                    print("[DEBUG] Gemini ERROR MESSAGE:", result["error"])
+                    if isinstance(result["error"], dict):
+                        error_msg = result["error"].get("message", str(result["error"]))
+                    else:
+                        error_msg = str(result["error"])
+                # 안전 정책 필터 디버깅
+                if "safetyStatus" in result:
+                    print("[DEBUG] Safety status:", result["safetyStatus"])
+                    error_msg = "응답이 정책(안전) 필터에 의해 제한됨: " + str(result["safetyStatus"])
+                # Gemini 응답 추출
+                if "output_text" in result:
+                    answer = result["output_text"]
+                elif "candidates" in result and result["candidates"]:
+                    # Gemini 2.5 응답 예시 (REST 구조)
+                    candidate = result["candidates"][0]
+                    # 구조 맞춰 'content'/'parts'/'text' 추출
+                    candidates_content = candidate.get("content", {})
+                    parts = candidates_content.get("parts", [])
+                    answer_candidates = [part.get("text","") for part in parts if "text" in part]
+                    answer = "\n".join(answer_candidates) if answer_candidates else "No response."
+                elif "output" in result and len(result["output"]) > 0 and "text" in result["output"][0]:
+                    answer = result["output"][0]["text"]
+                else:
+                    answer = "No response."
+                    if error_msg:
+                        print("[DEBUG] 정확한 원인:", error_msg)
+                        answer = f"No response. 원인: {error_msg}"
+            except Exception as e:
+                print("[DEBUG] Gemini API Exception:", e)
+                print("[DEBUG] Response text:", getattr(response, "text", "<no response>"))
+                raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
+            # DB 저장: Gemini 답변
             chat_id_ai = save_chat(project_id=None, session_id=session_id, user_input=combined_prompt, bot_output=answer, bot_name="gemini-research")
             session_histories[session_id]["history"].append({
                 "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "gemini-research"
             })
-            return answer  # 수정: 값만 반환!
+            return answer  # 답변 텍스트만 반환
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
+
 
 
 def update_session_history(request: Request, session_id: str, chat_id: int, new_user_input: str, new_bot_output: str):
