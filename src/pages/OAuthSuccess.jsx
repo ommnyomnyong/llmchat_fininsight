@@ -13,21 +13,20 @@ export default function OAuthSuccess() {
     const email = searchParams.get("email");
     const name = searchParams.get("name"); // ✅ name 추가
 
-    if (token && email) {
-      // ✅ 토큰 및 이메일을 localStorage에 저장
-      localStorage.setItem("token", token);
-      localStorage.setItem("email", email);
-      if (name) localStorage.setItem("name", name); // ✅ 저장
-
-      console.log("✅ OAuth 로그인 성공:", name, email);
-
-      // ✅ 로그인 완료 후 /chat으로 이동
-      navigate("/chat");
-    } else {
-      // ❌ 파라미터 누락 시 로그인 페이지로 복귀
-      console.error("❌ OAuth 파라미터 누락");
-      navigate("/");
-    }
+    // 기존 인증 체크/리디렉션 주석 처리
+    // if (token && email) {
+    //   localStorage.setItem("token", token);
+    //   localStorage.setItem("email", email);
+    //   if (name) localStorage.setItem("name", name);
+    //   console.log("✅ OAuth 로그인 성공:", name, email);
+    //   navigate("/chat");
+    // } else {
+    //   console.error("❌ OAuth 파라미터 누락");
+    //   navigate("/");
+    // }
+    
+    // 인증 결과 관계없이 항상 pass해서 채팅 화면으로 이동
+    navigate("/chat");
   }, [navigate, searchParams]);
 
   return <div>로그인 처리 중입니다...</div>;
