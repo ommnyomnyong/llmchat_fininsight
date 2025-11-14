@@ -10,15 +10,15 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from typing import Optional
 
 ## DB 모듈
-from db.vector_DB import add_vectors, search_context, delete_project_vectors
-from db.project_DB import (
+from backend.db.vector_DB import add_vectors, search_context, delete_project_vectors
+from backend.db.project_DB import (
     get_project_info, get_project_info_by_name, get_project_files, 
     get_project_chats, create_project, save_project_file, 
     save_project_chat, delete_project, get_all_projects, update_project_name)
 
 ## LLM
-from LLM.file_embeddings import extract_text_from_file
-from LLM.services import call_llm
+from backend.LLM.file_embeddings import extract_text_from_file
+from backend.LLM.services import call_llm
 
 
 router = APIRouter()
@@ -61,8 +61,14 @@ def create_new_project(
             project_name = f"{base_name}({suffix})"
         
         # 프로젝트 생성
-        create_project(email, project_name, description, project_purpose)
-        return {"message": f"프로젝트 '{project_name}' 생성 완료"}
+        new_project_id = create_project(email, project_name, description, project_purpose)
+        return {
+            "message": f"프로젝트 '{project_name}' 생성 완료",
+            "project_id": new_project_id,
+            "project_name": project_name,
+            "description": description,
+            "project_purpose": project_purpose
+        }
         
     except Exception as e:
         traceback.print_exc()
@@ -106,7 +112,7 @@ async def upload_project_file(
         # 파일 메타데이터 DB 저장
         save_project_file(project_id, file.filename, file.content_type, file_bytes, save_path)
         
-        return {"message": f"파일 '{file.filename}' 업로드 및 벡터화 완료"}
+        return {"message": f"파일 '{file.filename}' 업로그 및 임베딩 완료"}
     
     except Exception as e:
         traceback.print_exc()
@@ -119,6 +125,7 @@ async def project_chat(
     project_id: int = Form(...),
     model_name: str = Form(...),
     user_input: str = Form(...),
+    deep_research: bool = Form(False)
 ):
     
     """
@@ -142,7 +149,11 @@ async def project_chat(
         context = search_context(query=user_input, project_id=project_id, top_k=3)
         context_text = f"\n\n[참고 문서 내용]\n{context}" if context else ""
 
-
+        # 모델 선택
+        base_model = model_name.lower()
+        if deep_research:
+            model_name = f"{base_model}-research"
+        
         # LLM에게 과거 대화 내용과 새 입력 함께 전달
         full_prompt = f"{history_text}\nUser: {user_input}\nBot:"
         answer = call_llm(model_name, full_prompt, context_text)
@@ -289,5 +300,3 @@ def remove_project(project_id: int):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 삭제 실패: {str(e)} ❌")
-
-
