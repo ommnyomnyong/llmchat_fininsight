@@ -5,6 +5,12 @@ import ChatWindow from "../components/ChatWindow.jsx";
 
 import { useNavigate } from "react-router-dom";
 
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 // 간단 유틸
 const nowISO = () => new Date().toISOString();
 
@@ -194,7 +200,7 @@ const deleteProject = async (projectId) => {
 
   // 채팅 생성
   const createChat = (name = "새 채팅", projectId = selectedProjectId) => {
-    const id = `c-${crypto.randomUUID()}`;
+    const id = `c-${uuidv4()}`;
     const newChat = { id, name, projectId: projectId ?? null, createdAt: nowISO() };
     setChats((prev) => [newChat, ...prev]);
     setMessages((prev) => ({ ...prev, [id]: [] }));
@@ -228,13 +234,13 @@ const deleteProject = async (projectId) => {
     // 1) 현재 선택된 채팅이 없으면 새로 생성
     let chatId = selectedChatId;
     if (!chatId) {
-      chatId = `c-${crypto.randomUUID()}`;
+      chatId = `c-${uuidv4()}`;
       setMessages(prev => ({ ...prev, [chatId]: [] }));
     }
 
     // 2) 사용자 메시지 생성 및 반영
     const userMsg = {
-      id: `m-${crypto.randomUUID()}`,
+      id: `m-${uuidv4()}`,
       role: "user",
       text,
       createdAt: nowISO(),
@@ -246,7 +252,7 @@ const deleteProject = async (projectId) => {
     }));
 
     // AI 응답 "빈 메시지" 생성 (실시간으로 채워짐)
-    const replyMsgId = `m-${crypto.randomUUID()}`;
+    const replyMsgId = `m-${uuidv4()}`;
     setMessages(prev => ({
       ...prev,
       [chatId]: [
@@ -333,7 +339,7 @@ const deleteProject = async (projectId) => {
     } catch (error) {
       console.error("❌ 요청 중 오류 발생:", error);
       const errorMsg = {
-        id: `m-${crypto.randomUUID()}`,
+        id: `m-${uuidv4()}`,
         role: "assistant",
         text: `오류가 발생했습니다: ${error.message}`,
         createdAt: new Date().toISOString(),
