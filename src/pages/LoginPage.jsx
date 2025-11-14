@@ -18,6 +18,9 @@ function GoogleLoginButton() {
         // 기존 리디렉션 요청은 주석처리
         // window.location.href = "http://223.130.156.200:8000/auth/google/login";
         // 바로 채팅 화면으로 이동
+        localStorage.setItem('token', 'testtoken');
+        localStorage.setItem('email', 'test@example.com');
+        localStorage.setItem('name', '테스트');
         navigate("/chat");
       }}
     >
@@ -33,7 +36,7 @@ export default function LoginPage() {
 
   // ✅ 자동 로그인 유지 (기존 로직 유지)
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token", response.data.token);
     if (token) {
       console.log("✅ 이미 로그인된 사용자입니다. /chat으로 이동합니다.");
       navigate("/chat");

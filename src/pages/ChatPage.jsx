@@ -31,17 +31,16 @@ useEffect(() => {
   const email = localStorage.getItem("email");
   const name = localStorage.getItem("name");
 
-  if (token && email) {
-    // ✅ axios에 인증 헤더 설정
-    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  // 디버깅용 출력
+  console.log('✅ 토큰:', token, '| 이메일:', email);
 
-    // ✅ 사용자 정보 반영
+  if (token && email) {
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     setAccount((prev) => ({
       ...prev,
       name: name || prev.name,
       googleEmail: email,
     }));
-
     console.log("✅ 로그인된 사용자:", name, email);
   } else {
     navigate("/"); // 로그인 안된 경우 홈으로
