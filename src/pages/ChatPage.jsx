@@ -54,7 +54,7 @@ useEffect(() => {
     // 실제 로그인된 사용자 이메일로 교체 가능
     const email = account.googleEmail || "test@example.com";
 
-    axios.get(`http://127.0.0.1:8000/project/list?email=${email}`)
+    axios.get(`http://223.130.156.200:8000/project/list?email=${email}`)
       .then((res) => {
         console.log("📂 프로젝트 목록 응답:", res.data);
         setProjects(Array.isArray(res.data) ? res.data : res.data.projects || []);
@@ -95,7 +95,7 @@ useEffect(() => {
     console.log("📂 선택된 프로젝트 ID:", pid);
 
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/project/chat/history?project_id=${pid}`);
+      const res = await axios.get(`http://223.130.156.200:8000/project/chat/history?project_id=${pid}`);
       const chatsFromDB = res.data.chats || [];
 
       console.log("💬 프로젝트별 채팅 불러오기:", chatsFromDB);
@@ -128,11 +128,11 @@ useEffect(() => {
       formData.append("description", data.description || "");
       formData.append("project_purpose", data.project_purpose || "");
 
-      const res = await axios.post("http://127.0.0.1:8000/project/create", formData);
+      const res = await axios.post("http://223.130.156.200:8000/project/create", formData);
       console.log("📁 프로젝트 생성 결과:", res.data);
       
       // 목록 갱신
-      const listRes = await axios.get(`http://127.0.0.1:8000/project/list?email=${email}`);
+      const listRes = await axios.get(`http://223.130.156.200:8000/project/list?email=${email}`);
       setProjects(Array.isArray(listRes.data) ? listRes.data : listRes.data.projects || []);
 
       const projectId = res.data.project_id;
@@ -167,7 +167,7 @@ const renameProject = async (projectId, patch) => {
 
     // ✅ 서버 요청
     await axios.put(
-      `http://127.0.0.1:8000/project/rename/${projectId}`,
+      `http://223.130.156.200:8000/project/rename/${projectId}`,
       { project_name: newName },
       { headers: { "Content-Type": "application/json" } }
     );
@@ -185,7 +185,7 @@ const deleteProject = async (projectId) => {
     // ✅ UI 즉시 반영
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
 
-    await axios.delete(`http://127.0.0.1:8000/project/delete/${projectId}`);
+    await axios.delete(`http://223.130.156.200:8000/project/delete/${projectId}`);
     console.log(`🗑️ 프로젝트 ${projectId} 삭제 완료`);
   } catch (err) {
     console.error("❌ 프로젝트 삭제 실패:", err);
@@ -287,7 +287,7 @@ const deleteProject = async (projectId) => {
       // 파일 업로드 기능을 나중에 붙일 수 있음
       // if (file) formData.append("file", file);
 
-      const response = await fetch(`http://127.0.0.1:8000/chat/agent-call/${modelName}`, {
+      const response = await fetch(`http://223.130.156.200:8000/chat/agent-call/${modelName}`, {
         method: "POST",
         body: formData,
       });

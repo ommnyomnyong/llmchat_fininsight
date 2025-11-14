@@ -72,7 +72,7 @@ export default function ChatWindow({ messages = [], onSend, onFileUpload, select
         formData.append("project_id", selectedProjectId);
         formData.append("file", selectedFile);
 
-        const res = await axios.post("http://127.0.0.1:8000/project/upload-file", formData, {
+        const res = await axios.post("http://223.130.156.200:8000/project/upload-file", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
