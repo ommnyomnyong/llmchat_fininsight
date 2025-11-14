@@ -29,3 +29,7 @@ app.include_router(user_router, prefix="/auth")
 @app.get("/healthz")
 def health_check():
     return {"status": "ok"}
+
+@app.get("/")
+def read_root():
+    return {"message": "FastAPI 서버 정상"}
