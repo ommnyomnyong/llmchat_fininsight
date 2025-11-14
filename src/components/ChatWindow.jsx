@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { FaBrain, FaPaperPlane } from "react-icons/fa";
+import { FaBrain, FaPaperPlane, FaUpload } from "react-icons/fa";
 import { SiOpenai, SiGooglegemini, SiX } from "react-icons/si";
 
 const models = [
@@ -25,7 +25,7 @@ function fmtYMD(iso) {
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
-export default function ChatWindow({ messages = [], onSend }) {
+export default function ChatWindow({ messages = [], onSend, onFileUpload, selectedProjectId }) {
   // ✅ props가 제대로 전달됐는지 확인하는 디버그 로그
   console.log("💬 ChatWindow props:", { onSend });
   
@@ -33,7 +33,10 @@ export default function ChatWindow({ messages = [], onSend }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
   const [text, setText] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const selected = useMemo(
@@ -57,26 +60,48 @@ export default function ChatWindow({ messages = [], onSend }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    const t = text.trim();
-    console.log("ChatWindow handleSend 호출:", t);
-    console.log("onSend 함수 존재 여부:", typeof onSend, onSend);
 
-    if (!t) {
-      console.log("빈 텍스트, 전송 안함");
-      return;
-    }
+  // 메시지 전송
+  const handleSend = async () => {
+    if (!text.trim() && !selectedFile) return;
 
-    if (!onSend) {
-      console.error("❌ onSend 함수가 전달되지 않았습니다!");
-      return;
+    try {
+      // 파일 업로드 (프로젝트가 있을 때만)
+      if (selectedFile && selectedProjectId) {
+        const formData = new FormData();
+        formData.append("project_id", selectedProjectId);
+        formData.append("file", selectedFile);
+
+        const res = await axios.post("http://127.0.0.1:8000/project/upload-file", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        console.log("📂 업로드 완료:", res.data);
+        alert(`✅ '${selectedFile.name}' 업로드 및 임베딩 완료`);
+        setSelectedFile(null);
+      }
+
+      // 채팅 메시지 전송
+      if (text.trim()) {
+        onSend?.(text, model, deepResearch);
+        setText("");
+      }
+    } catch (err) {
+      console.error("❌ 업로드/전송 오류:", err);
+      alert("❌ 전송 중 오류: " + err.message);
     }
-    
-    setText("");
-    console.log("onSend 호출, model:", model, "deepResearch:", deepResearch);
-    onSend(t, model, deepResearch);
   };
-
+  // 파일 선택 핸들러
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!selectedProjectId) {
+      alert("⚠️ 프로젝트 채팅에서만 파일 업로드가 가능합니다.");
+      return;
+    }
+    onFileUpload?.(file);
+    e.target.value = ""; // 파일 선택 초기화
+  };
   return (
     <div style={{ flex: 1, display: "grid", gridTemplateRows: "auto 1fr auto", height: "100%" }}>
       {/* 상단바 */}
@@ -164,10 +189,43 @@ export default function ChatWindow({ messages = [], onSend }) {
           borderTop: "1px solid #e5e7eb",
           padding: "10px 14px",
           display: "grid",
-          gridTemplateColumns: "1fr auto",
+          gridTemplateColumns: "auto 1fr auto",
           gap: 8,
+          alignItems: "center",
         }}
       >
+        {/* ✅ 프로젝트 채팅에서만 "+" 아이콘 표시 */}
+        {selectedProjectId ? (
+          <>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: "none" }}
+              onChange={handleFileSelect}
+            />
+            <button
+              title="파일 업로드"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#f8fafc",
+                borderRadius: 10,
+                padding: "8px 10px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: 40,
+                width: 40
+              }}
+            >
+              <FaUpload size={14} />
+            </button>
+          </>
+        ) : (
+          <div style={{ width: 34 }} /> // 빈공간 유지
+        )}
+
         <input
           ref={inputRef}
           value={text}
@@ -286,8 +344,12 @@ const sendBtn = {
   color: "#fff",
   borderRadius: 10,
   padding: "0 14px",
+  width: 60,          // 업로드 버튼과 동일한 크기
+  height: 45,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
+  boxShadow: "0 2px 6px rgba(59,130,246,0.25)",
+  transition: "all 0.15s ease-in-out",
 };
