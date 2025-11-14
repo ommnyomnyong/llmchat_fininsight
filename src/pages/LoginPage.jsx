@@ -36,7 +36,7 @@ export default function LoginPage() {
 
   // ✅ 자동 로그인 유지 (기존 로직 유지)
   useEffect(() => {
-    const token = localStorage.getItem("token", response.data.token);
+    const token = localStorage.getItem("token");
     if (token) {
       console.log("✅ 이미 로그인된 사용자입니다. /chat으로 이동합니다.");
       navigate("/chat");
