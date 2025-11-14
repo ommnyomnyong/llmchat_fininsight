@@ -25,7 +25,7 @@
 
 ## ⚙️ 실행 방법
 1. `.env` 파일에 API 키 및 DB 정보 입력  
-2. 백엔드 서버: `uvicorn backend.main:app --reload`  
+2. 백엔드 서버: `uvicorn main:app --reload`  
 3. 프론트엔드: `npm start` 또는 `yarn start`  
 4. 브라우저에서 `http://localhost:3000` 접속
 

@@ -10,15 +10,15 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from typing import Optional
 
 ## DB 모듈
-from backend.db.vector_DB import add_vectors, search_context, delete_project_vectors
-from backend.db.project_DB import (
+from db.vector_DB import add_vectors, search_context, delete_project_vectors
+from db.project_DB import (
     get_project_info, get_project_info_by_name, get_project_files, 
     get_project_chats, create_project, save_project_file, 
     save_project_chat, delete_project, get_all_projects, update_project_name)
 
 ## LLM
-from backend.LLM.file_embeddings import extract_text_from_file
-from backend.LLM.services import call_llm
+from LLM.file_embeddings import extract_text_from_file
+from LLM.services import call_llm
 
 
 router = APIRouter()
