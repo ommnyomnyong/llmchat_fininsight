@@ -67,13 +67,14 @@ def create_project(email: str, project_name: str, description: str, project_purp
         VALUES (:email, :project_name, :description, :project_purpose)
     """)
     with project_engine.connect() as conn:
-        conn.execute(query, {
+        result = conn.execute(query, {
             "email": email,
             "project_name": project_name,
             "description": description,
             "project_purpose" : project_purpose
         })
         conn.commit()
+        return result.lastrowid
 
 ## ---------------------- 프로젝트명 중복 확인 ----------------------
 def get_project_info_by_name(project_name: str):
@@ -190,6 +191,7 @@ def delete_project(project_id: int):
         
     except Exception as e:
         return {"error": f"❌ 삭제 중 오류 발생: {str(e)}"}
+
 
 
 
