@@ -10,7 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from typing import Optional
 
 ## DB 모듈
-from db.vector_DB import add_vectors, search_context, delete_project_vectors
+from db.vector_DB import add_vectors, search_context, delete_project_vectors, CHROMA_DB_PATH
 from db.project_DB import (
     get_project_info, get_project_info_by_name, get_project_files, 
     get_project_chats, create_project, save_project_file, 
@@ -24,7 +24,8 @@ from LLM.services import call_llm
 router = APIRouter()
 
 BASE_UPLOAD_DIR = "backend/uploads"
-BASE_VECTOR_DIR = "backend/vector_store"
+BASE_VECTOR_DIR = CHROMA_DB_PATH    # 임베딩 위치 완전 통일
+
 DELETE_AFTER_DAYS = 7    ## 업로드 된 파일 7일마다 자동 삭제
 
 os.makedirs(BASE_UPLOAD_DIR, exist_ok=True)
@@ -66,8 +67,6 @@ def create_new_project(
             "message": f"프로젝트 '{project_name}' 생성 완료",
             "project_id": new_project_id,
             "project_name": project_name,
-            "description": description,
-            "project_purpose": project_purpose
         }
         
     except Exception as e:
@@ -101,18 +100,28 @@ async def upload_project_file(
         with open(save_path, "wb") as f:
             f.write(file_bytes)
 
+        # 파일 사이즈 계산
+        file_size = len(file_bytes)
+        
         ## 텍스트 추출
         text = extract_text_from_file(file_bytes, file.filename) 
-        if not text.strip():
+        if not text or not text.strip():
             raise ValueError("❌ 텍스트 추출 실패 ❌")
         
        # 벡터화 (project_id 단위로 분리)
         add_vectors(project_id, text)
         
         # 파일 메타데이터 DB 저장
-        save_project_file(project_id, file.filename, file.content_type, file_bytes, save_path)
+        save_project_file(
+            project_id=project_id,
+            file_name=file.filename,
+            mime_type=file.content_type,
+            file_path=save_path,       
+            file_size=file_size
+        )
         
-        return {"message": f"파일 '{file.filename}' 업로그 및 임베딩 완료"}
+        return {"message": f"파일 '{file.filename}' 업로그 및 임베딩 완료",
+                "file_size": file_size}
     
     except Exception as e:
         traceback.print_exc()
@@ -125,7 +134,6 @@ async def project_chat(
     project_id: int = Form(...),
     model_name: str = Form(...),
     user_input: str = Form(...),
-    deep_research: bool = Form(False)
 ):
     
     """
@@ -145,32 +153,36 @@ async def project_chat(
         history_text = "\n".join([f"User: {h['user_input']}\nBot: {h['bot_output']}" for h in history])
         
         
-        # 벡터 DB에서 문맥 검색 (있으면 참고용으로 추가)
-        context = search_context(query=user_input, project_id=project_id, top_k=3)
+        vector_dir = os.path.join(BASE_VECTOR_DIR, str(project_id))
+        os.makedirs(vector_dir, exist_ok=True)
+
+        # 벡터 검색 (오류 방지)
+        try:
+            context = search_context(
+                project_id=project_id,
+                query=user_input,
+                top_k=3
+            )
+        except Exception:
+            context = None
         context_text = f"\n\n[참고 문서 내용]\n{context}" if context else ""
 
-        # 모델 선택
-        base_model = model_name.lower()
-        if deep_research:
-            model_name = f"{base_model}-research"
         
-        # LLM에게 과거 대화 내용과 새 입력 함께 전달
-        full_prompt = f"{history_text}\nUser: {user_input}\nBot:"
-        answer = call_llm(model_name, full_prompt, context_text)
+        # 프롬프트 구성
+        prompt = f"{history_text}\nUser: {user_input}\nBot:"
+        
+        ## LLM 응답
+        answer = call_llm(model_name, prompt, context_text)
 
 
         # 대화 DB에 저장
         save_project_chat(project_id, user_input, answer, model_name)
 
 
-        # 프론트로 반환 (바로 이어붙이기 가능)
-        return JSONResponse(content={
-            "project_id": project_id,
-            "model_name": model_name,
-            "user_input": user_input,
-            "bot_output": answer
-        })
-    
+        return {"bot_output": answer}
+
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 대화 실패: {str(e)} ❌")
@@ -198,20 +210,18 @@ def get_chat_history(project_id: int):
         chats = get_project_chats(project_id)
 
         # 임베딩 여부
-        vector_path = f"{BASE_VECTOR_DIR}/{project_id}"
+        vector_path = os.path.join(BASE_VECTOR_DIR, str(project_id))
         has_embedding = os.path.exists(vector_path) and len(os.listdir(vector_path)) > 0
 
-        response_data = {
+        return {
             "project": project,
             "files": files,
             "chats": chats,  # 프론트에서 챗 내용이 이어서 표시 가능
             "embedding": {
                 "exists": has_embedding,
-                "path": vector_path if has_embedding else None
+                "path": vector_path
             }
         }
-
-        return JSONResponse(content=jsonable_encoder(response_data))
     
     except Exception as e:
         traceback.print_exc()
@@ -243,7 +253,7 @@ def auto_delete_old_files():
     for root, _, files in os.walk(BASE_UPLOAD_DIR):
         for file in files:
             path = os.path.join(root, file)
-            if os.path.isfile(path) and now - os.path.getmtime(path) > DELETE_AFTER_DAYS * 86400:
+            if now - os.path.getmtime(path) > DELETE_AFTER_DAYS * 86400:
                 os.remove(path)
                 print(f"🗑️ 자동 삭제 완료: {path}")
 
@@ -284,10 +294,9 @@ def remove_project(project_id: int):
         
         # 파일 삭제
         files = get_project_files(project_id)
-        for file_info in files:
-            file_path = file_info.get("file_path")
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
+        for f in files:
+            if os.path.exists(f["file_path"]):
+                os.remove(f["file_path"])
 
         # 2. DB에서 프로젝트, 파일, 대화 기록 삭제
         delete_project(project_id)
@@ -295,7 +304,7 @@ def remove_project(project_id: int):
         # 3. 벡터DB에서 해당 프로젝트 데이터 삭제
         delete_project_vectors(project_id)
 
-        return {"message": f"프로젝트 {project_id} 및 관련 데이터 전체 삭제 완료"}
+        return {"message": f"프로젝트 {project_id} 삭제 완료"}
 
     except Exception as e:
         traceback.print_exc()
