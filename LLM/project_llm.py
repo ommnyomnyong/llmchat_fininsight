@@ -55,7 +55,7 @@ def _grok(messages):
     headers = {"Authorization": f"Bearer {XAI_API_KEY}"}
 
     payload = {
-        "model": "grok",
+        "model": "grok-4",
         "messages": messages,
     }
 
@@ -153,22 +153,13 @@ def build_project_context(project_id: int, prompt: str, uploaded_file_bytes=None
         if c["bot_output"]:
             messages.append({"role": "assistant", "content": c["bot_output"]})
 
-    # 벡터 검색 결과
-    rag_context = search_context(project_id, prompt)
     if rag_context:
         messages.append({
             "role": "system",
             "content": f"[문서 기반 검색 결과]\n{rag_context}"
         })
-    else:
-        # 벡터 데이터 없을 때 빈 내용 또는 기본 문구로 대체
-        messages.append({
-            "role": "system",
-            "content": "[문서 기반 검색 결과가 없습니다]"
-        })
-
-    # 업로드 파일 기반 내용
-    if uploaded_file_bytes and filename:
+    elif uploaded_file_bytes and filename:
+        # 업로드 파일 내용으로 대체
         extracted = extract_text_from_file(uploaded_file_bytes, filename)
         if extracted:
             messages.append({
