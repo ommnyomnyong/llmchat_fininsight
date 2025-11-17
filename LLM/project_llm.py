@@ -199,7 +199,7 @@ def call_project_llm(model: str, project_id: int, prompt: str, uploaded_file_byt
     elif model == "gemini":
         answer = _gemini(messages[-1]["content"])  # gemini는 messages가 아닌 text 기반
         
-    elif model == "grok-4":
+    elif model in ["grok", "grok-4"]:
         answer = _grok(messages)
         
     elif model in ["deep", "research", "gemini-research"]:
