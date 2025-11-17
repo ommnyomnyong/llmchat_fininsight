@@ -406,7 +406,7 @@ def call_grok_model(request: Request, req):
     return StreamingResponse(event_generator(), media_type="text/plain")
 
 
-def call_deep_research_model_with_external_search(request, req):
+def call_deep_research_model(request, req):
     session_histories = request.app.state.session_histories
     session_id = req.session_id
     prompt = req.prompt
