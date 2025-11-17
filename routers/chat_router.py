@@ -20,7 +20,7 @@ async def agent_call(
     project_id: Optional[int] = Form(None),
     file: Optional[Union[UploadFile, str]] = File(None)
 ):
-    print(f"[DEBUG] session_id={session_id!r}, prompt={prompt!r}")
+    print(f"[DEBUG] req.session_id: {req.session_id!r}, req.prompt: {req.prompt!r}")
 
     session_histories = request.app.state.session_histories
     try:
