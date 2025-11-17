@@ -4,7 +4,7 @@ from typing import Optional, Union
 from db.chat_DB import save_chat, get_chats, update_chat, get_chat_by_id
 from LLM.services import (
     call_openai_model, call_gemini_model, call_grok_model,
-    call_deep_research_model #update_session_history
+    call_deep_research_model, generate_chat_title #update_session_history
 )
 from LLM.models import ModelRequest
 
@@ -20,8 +20,6 @@ async def agent_call(
     project_id: Optional[int] = Form(None),
     file: Optional[Union[UploadFile, str]] = File(None)
 ):
-    print(f"[DEBUG] session_id: {session_id!r}")
-    print(f"[DEBUG] prompt: {new_prompt!r}")
     session_histories = request.app.state.session_histories
     try:
         text_from_file = None
@@ -34,13 +32,18 @@ async def agent_call(
             text_from_file = extract_text_from_file(content, file.filename)
             if not text_from_file:
                 return "죄송합니다. 파일을 확인할 수 없습니다."
+        # new_prompt 변수 기본값 먼저 할당
         new_prompt = f"{text_from_file}\n{prompt}" if text_from_file else prompt
 
-        # 모델명 강제변환 (심층리서치 요청시에)
+        # 디버깅용 로그 – new_prompt 할당 후 출력
+        print(f"[DEBUG] session_id: {session_id!r}")
+        print(f"[DEBUG] prompt: {new_prompt!r}")
+
+        # 모델명 강제 변환 (심층리서치 요청 시)
         if model_name in ["openai-research", "grok-research"]:
             model_name = "gemini-research"
 
-        # ModelRequest 객체 생성 (반드시 변환된 model_name을 넣음)
+        # ModelRequest 객체 생성 (반드시 변환된 model_name 으로)
         req = ModelRequest(
             session_id=session_id,
             prompt=new_prompt,
@@ -59,7 +62,7 @@ async def agent_call(
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다")
 
-        # Gemini 계열은 답변이 문자열(str), 나머지는 딕셔너리(dict)
+        # Gemini 계열은 문자열, 나머지는 dict 형태 처리
         if model_name == "grok":
             return ai_response  # StreamingResponse 바로 반환
 
@@ -68,18 +71,19 @@ async def agent_call(
         else:
             answer = ai_response["answer"] if isinstance(ai_response, dict) else str(ai_response)
 
-        # 채팅 내용 저장/수정
+        # (주석 처리된) 채팅 내용 저장/수정 필요시 로직 활성화 가능
         # if chat_id:
         #     update_session_history(session_id, chat_id, new_prompt, answer)
-        # print('[DEBUG] session_histories[session_id]:', session_histories.get(session_id))
-        # print('[DEBUG] chat_id:', chat_id)
 
         return answer
+
     except Exception as e:
         import traceback
         traceback_str = ''.join(traceback.format_exception(None, e, e.__traceback__))
         print(f"[ERROR] Exception in agent_call:\n{traceback_str}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+
 
 @router.post("/chat/{session_id}/generate-title")
 async def generate_title_for_chat(
