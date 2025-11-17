@@ -95,21 +95,20 @@ useEffect(() => {
 
   // 프로젝트 선택
   const handleSelectProject = async (pid) => {
-    setSelectedProjectId(pid);
-    
-    const chatId = `project-${pid}`;
-    setSelectedChatId(chatId);
+  setSelectedProjectId(pid);
 
-    try {
-      const res = await axios.get(`http://223.130.156.200:8000/project/chat/history?project_id=${pid}`);
-      const chatsFromDB = res.data.chats ?? [];
+  const chatId = `project-${pid}`;
+  setSelectedChatId(chatId);
 
-      console.log("💬 프로젝트별 채팅 불러오기:", chatsFromDB);
+  try {
+    const res = await axios.get(`http://223.130.156.200:8000/project/chat/history?project_id=${pid}`);
+    const chatsFromDB = res.data.chats ?? [];
 
-      // 백엔드의 chat 데이터 형식에 맞게 messages로 변환
-      const formatted = chatsFromDB.map((c, idx) => ({
-        const m = [];
-      
+    console.log("💬 프로젝트별 채팅 불러오기:", chatsFromDB);
+
+    const formatted = chatsFromDB.map((c, idx) => {
+      const m = [];
+
       if (c.user_input) {
         m.push({
           id: `m-${idx}-u`,
@@ -130,16 +129,14 @@ useEffect(() => {
 
       return m;
     });
-    // 프로젝트 전용 "가상 채팅 ID"로 messages 저장
-      const chatId = `project-${pid}`;
-      setMessages((prev) => ({ ...prev, [chatId]: formatted }));
-      setSelectedChatId(chatId);
 
-    } catch (err) {
-      console.error("❌ 채팅 불러오기 실패:", err);
-    }
-  };
+    setMessages((prev) => ({ ...prev, [chatId]: formatted }));
+    setSelectedChatId(chatId);
 
+  } catch (err) {
+    console.error("❌ 채팅 불러오기 실패:", err);
+  }
+}; 
 
   // ✅ 프로젝트 생성
   const createProject = async (data) => {
