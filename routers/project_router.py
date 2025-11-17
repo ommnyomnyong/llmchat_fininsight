@@ -83,7 +83,7 @@ def create_new_project(
 
         # gemini 기반 첫 메시지 생성
         first_answer = call_project_llm(
-            model="grok",
+            model="grok-4",
             project_id=new_project_id,
             prompt=first_prompt
         )

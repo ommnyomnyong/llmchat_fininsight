@@ -523,6 +523,7 @@ def _call_grok(prompt: str):
             ],
         }
 
+
         response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=payload)
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail=f"Grok API 오류: {response.text}")
