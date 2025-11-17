@@ -317,9 +317,21 @@ def call_deep_research_model(request, req):
     session_histories = request.app.state.session_histories
     session_id = req.session_id
     prompt = req.prompt
-    model_name = "gemini-research"  # 예시
 
-    messages = prepare_messages_for_model(request, session_id, model_name)
+    # 기본 모델명 grok-4로 설정, 필요시 req.model_name 으로 변경 가능
+    model_name = getattr(req, "model_name", "grok-research")
+    print(f"[DEBUG] call_deep_research_model: using model {model_name}")
+
+    # 실제 모델 이름 매핑
+    if model_name == "gemini-research":
+        api_model_name = "gemini-2.5-pro"
+    elif model_name == "grok-research":
+        api_model_name = "grok-4"
+    else:
+        raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
+
+    # 세션 이력 제한 및 토크나이저
+    messages = prepare_messages_for_model(request, session_id, api_model_name)
 
     base_deep_research_prompt = (
         "You are an AI research assistant. Use the document search results "
@@ -334,7 +346,14 @@ def call_deep_research_model(request, req):
     context_text = f"Search results:\n{search_results}"
     combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}"
 
-    chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="deep-research")
+    # 사용자 요청 DB 저장
+    chat_id_user = save_chat(
+        project_id=None,
+        session_id=session_id,
+        user_input=prompt,
+        bot_output="",
+        bot_name="deep-research"
+    )
 
     messages.append({"role": "user", "content": combined_prompt})
 
@@ -342,32 +361,21 @@ def call_deep_research_model(request, req):
     session_histories[session_id]["last_access"] = time.time()
 
     try:
-        if getattr(req, "model_name", "") == "gemini-research":
-            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
-            headers = {
-                "Content-Type": "application/json",
-            }
-            params = {
-                "key": GEMINI_API_KEY  # 단순 API 키를 쿼리 파라미터로 전달
-            }
-            payload = {
-                "contents": [{"parts": [{"text": combined_prompt}]}]
-            }
+        if api_model_name == "gemini-2.5-pro":
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{api_model_name}:generateContent"
+            headers = {"Content-Type": "application/json"}
+            params = {"key": GEMINI_API_KEY}
+            payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
 
-            print(f"[DEBUG] API 호출 URL: {api_url}?key=***")
-            print(f"[DEBUG] Payload: {payload}")
+            print(f"[DEBUG] Gemini API 호출 URL: {api_url}?key=***")
+            print(f"[DEBUG] Gemini Payload: {payload}")
 
             response = requests.post(api_url, headers=headers, params=params, json=payload, timeout=120)
-
-            print(f"[DEBUG] HTTP 상태코드: {response.status_code}")
-            print(f"[DEBUG] 응답 헤더: {response.headers}")
-
             response.raise_for_status()
 
             result = response.json()
-            print(f"[DEBUG] API 응답 JSON: {result}")
+            print(f"[DEBUG] Gemini API 응답: {result}")
 
-            # 응답 처리 로직...
             if "output_text" in result:
                 answer = result["output_text"]
             elif "candidates" in result and result["candidates"]:
@@ -375,11 +383,39 @@ def call_deep_research_model(request, req):
                 answer = "".join(part.get("text", "") for part in parts)
             else:
                 answer = "No response."
-                print("[WARN] 예상치 못한 응답 포맷, 답변 없음")
+                print("[WARN] Gemini 예상치 못한 응답 포맷, 답변 없음")
 
+        elif api_model_name == "grok-4":
+            api_url = "https://api.x.ai/v1/chat/completions"
+            api_key = os.getenv("XAI_API_KEY")
+            if not api_key:
+                raise HTTPException(status_code=500, detail="Grok(xAI) API Key 미설정")
+
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            payload = {
+                "model": "grok-4",
+                "messages": messages,
+                "max_tokens": 2048,
+                "stream": False  # 필요에 따라 True로 설정 가능
+            }
+
+            print(f"[DEBUG] Grok API 호출 URL: {api_url}")
+            print(f"[DEBUG] Grok Payload: {payload}")
+
+            response = requests.post(api_url, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+
+            data = response.json()
+            print(f"[DEBUG] Grok API 응답: {data}")
+
+            if "choices" in data and len(data["choices"]) > 0:
+                answer = data["choices"][0]["message"]["content"]
+            else:
+                answer = "No response."
+                print("[WARN] Grok 예상치 못한 응답 포맷, 답변 없음")
         else:
-            print("[ERROR] 지원하지 않는 모델 호출 시도")
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
+
     except Exception as e:
         print("\n[EXCEPTION] Deep Research 모델 호출 중 예외 발생!")
         print(f"[EXCEPTION] 예외 타입: {type(e)}")
@@ -388,9 +424,19 @@ def call_deep_research_model(request, req):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
 
-    chat_id_ai = save_chat(project_id=None, session_id=session_id, user_input=combined_prompt, bot_output=answer, bot_name="gemini-research")
+    # AI 답변 DB 저장 및 세션에 추가
+    chat_id_ai = save_chat(
+        project_id=None,
+        session_id=session_id,
+        user_input=combined_prompt,
+        bot_output=answer,
+        bot_name=model_name
+    )
     session_histories[session_id]["history"].append({
-        "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "gemini-research"
+        "id": chat_id_ai,
+        "role": "assistant",
+        "content": answer,
+        "bot_name": model_name
     })
 
     return answer
