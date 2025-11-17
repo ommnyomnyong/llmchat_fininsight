@@ -319,7 +319,7 @@ def call_deep_research_model(request, req):
     prompt = req.prompt
 
     # 기본 모델명 grok-4로 설정, 필요시 req.model_name 으로 변경 가능
-    model_name = getattr(req, "model_name", "grok-4")
+    model_name = getattr(req, "model_name", "grok-research")
     print(f"[DEBUG] call_deep_research_model: using model {model_name}")
 
     # 실제 모델 이름 매핑

@@ -42,8 +42,8 @@ async def agent_call(
         print(f"[DEBUG] prompt: {new_prompt!r}")
 
         # 모델명 강제 변환 (심층리서치 요청 시)
-        if model_name in ["openai-research", "grok-research"]:
-            model_name = "gemini-research"
+        if model_name in ["openai-research", "grok-research", "gemini-research"]:
+            model_name = "grok-research"
 
         # ModelRequest 객체 생성 (반드시 변환된 model_name 으로)
         req = ModelRequest(
