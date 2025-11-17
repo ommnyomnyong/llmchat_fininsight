@@ -342,7 +342,8 @@ def call_deep_research_model(request, req):
     )
 
     search_results = naver_search(prompt)  # 별도 검색 API 호출
-
+     # 디버깅용 네이버 검색 결과 출력
+    print(f"[DEBUG] 네이버 검색 결과:\n{search_results}")
     context_text = f"Search results:\n{search_results}"
     combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}"
 
