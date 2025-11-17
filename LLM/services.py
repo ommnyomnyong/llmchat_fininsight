@@ -9,11 +9,7 @@ import json
 import traceback
 from fastapi import UploadFile
 import tiktoken
-from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_core.runnables import RunnablePassthrough
-from langchain.prompts import ChatPromptTemplate
-from langchain.chat_models import ChatOpenAI
-from langchain.output_parsers import StrOutputParser
+from duckduckgo_search import ddg
 
 from db.chat_DB import save_chat, load_chat_history_from_db
 from .file_embeddings import (
@@ -317,36 +313,25 @@ def call_grok_model(request: Request, req):
 
     return StreamingResponse(event_generator(), media_type="text/plain")
 
-# 체인 및 도구 초기화 (함수 외부에 두어 재사용 권장)
-duckduckgo_search = DuckDuckGoSearchRun()
+def duckduckgo_query(query: str, max_results: int = 5):
+    results = ddg(query, max_results=max_results)
+    # 검색 결과에서 제목과 간략 설명 추출해 문자열로 만듦
+    if not results:
+        return "검색 결과가 없습니다."
+    composed = ""
+    for i, r in enumerate(results):
+        composed += f"{i+1}. {r.get('title', '')}\n{r.get('body', '')}\n링크: {r.get('href', '')}\n\n"
+    return composed.strip()
 
-template = """Answer the question based on context.
-
-Question: {question}
-Context: {context}
-Answer:"""
-
-prompt = ChatPromptTemplate.from_template(template)
-model = ChatOpenAI(model="gpt-4")
-parser = StrOutputParser()
-
-chain = (
-    {"question": RunnablePassthrough(), "context": RunnablePassthrough()}
-    | prompt
-    | model
-    | parser
-)
 
 def call_deep_research_model(request, req):
     session_histories = request.app.state.session_histories
     session_id = req.session_id
     prompt = req.prompt
 
-    # 기본 모델명 grok-4로 설정, 필요시 req.model_name 으로 변경 가능
     model_name = getattr(req, "model_name", "grok-research")
     print(f"[DEBUG] call_deep_research_model: using model {model_name}")
 
-    # 실제 모델 이름 매핑
     if model_name == "gemini-research":
         api_model_name = "gemini-2.5-pro"
     elif model_name == "grok-research":
@@ -354,7 +339,6 @@ def call_deep_research_model(request, req):
     else:
         raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
 
-    # 세션 이력 제한 및 토크나이저
     messages = prepare_messages_for_model(request, session_id, api_model_name)
 
     base_deep_research_prompt = (
@@ -365,15 +349,15 @@ def call_deep_research_model(request, req):
         "and reasoning."
     )
 
-    search_results = duckduckgo_search.invoke(prompt)
+    # duckduckgo-search 직접 사용
+    search_results = duckduckgo_query(prompt)
     print(f"[DEBUG] DuckDuckGo 검색 결과:\n{search_results}")
 
     context_text = f"Search results:\n{search_results}"
-    combined_prompt = f"{base_prompt}\n{context_text}\n{prompt}"
+    combined_prompt = f"{base_deep_research_prompt}\n{context_text}\nUser query:\n{prompt}"
 
     messages.append({"role": "user", "content": combined_prompt})
 
-    # 사용자 요청 DB 저장
     chat_id_user = save_chat(
         project_id=None,
         session_id=session_id,
@@ -381,8 +365,6 @@ def call_deep_research_model(request, req):
         bot_output="",
         bot_name="deep-research"
     )
-
-    messages.append({"role": "user", "content": combined_prompt})
 
     session_histories[session_id]["history"] = messages
     session_histories[session_id]["last_access"] = time.time()
@@ -423,7 +405,7 @@ def call_deep_research_model(request, req):
                 "model": "grok-4",
                 "messages": messages,
                 "max_tokens": 2048,
-                "stream": False  # 필요에 따라 True로 설정 가능
+                "stream": False
             }
 
             print(f"[DEBUG] Grok API 호출 URL: {api_url}")
@@ -451,7 +433,6 @@ def call_deep_research_model(request, req):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
 
-    # AI 답변 DB 저장 및 세션에 추가
     chat_id_ai = save_chat(
         project_id=None,
         session_id=session_id,
@@ -467,7 +448,6 @@ def call_deep_research_model(request, req):
     })
 
     return answer
-
 
 
 # ----------------------------------------------
