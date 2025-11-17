@@ -223,6 +223,48 @@ const deleteProject = async (projectId) => {
       setSelectedChatId(fallback ? fallback.id : null);
     }
   };
+  
+// :흰색_확인_표시: 새로운 함수: 채팅 제목 자동 생성 (첫 메시지 요약)
+  const generateChatTitle = useCallback(async (chatId, userMessage) => {
+    try {
+      // 현재 채팅의 이름 확인
+      const currentChat = chats.find(c => c.id === chatId);
+      // "새 채팅" 또는 "현재 대화"인 경우에만 제목 변경
+      if (!currentChat || (currentChat.name !== "새 채팅" && currentChat.name !== "현재 대화")) {
+        return;
+      }
+      // 메시지가 너무 짧으면 그대로 사용
+      if (userMessage.length <= 20) {
+        renameChat(chatId, { name: userMessage });
+        return;
+      }
+      // AI에게 요약 요청
+      const formData = new FormData();
+      formData.append("session_id", "title-generator");
+      formData.append("prompt", `다음 메시지를 15자 이내로 간단히 요약해서 채팅방 제목으로 만들어줘. 답변은 오직 제목만 말해:\n\n${userMessage}`);
+      const response = await fetch(`http://223.130.156.200:8000/chat/agent-call/gemini`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      let title = await response.text();
+      // 텍스트 정리
+      title = title.trim()
+        .replace(/^["']|["']$/g, '') // 따옴표 제거
+        .replace(/\\r\\n|\\n/g, ' ') // 줄바꿈 제거
+        .replace(/\s+/g, ' ') // 연속 공백 제거
+        .slice(0, 30); // 최대 30자
+      if (title) {
+        renameChat(chatId, { name: title });
+        console.log(`:메모: 채팅 제목 자동 생성: ${title}`);
+      }
+    } catch (error) {
+      console.error(":x: 채팅 제목 생성 실패:", error);
+      // 실패 시 메시지 앞 20자를 제목으로 사용
+      const fallbackTitle = userMessage.slice(0, 20) + (userMessage.length > 20 ? '...' : '');
+      renameChat(chatId, { name: fallbackTitle });
+    }
+  }, [chats, renameChat]);
 
   // ✅ 메시지 전송 함수 (수정 완료 버전)
   const sendMessage = useCallback(async (text, model, deepResearch) => {
