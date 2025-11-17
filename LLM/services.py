@@ -315,8 +315,9 @@ def call_grok_model(request: Request, req):
 
 def duckduckgo_query(query: str, max_results: int = 5):
     with DDGS() as ddgs:
-        results_gen = ddgs.text(keywords=query, max_results=max_results)
-        results = list(results_gen)  # generator를 리스트로 변환
+        # query는 첫 번째 위치 인자, max_results는 키워드 인자
+        results_gen = ddgs.text(query, max_results=max_results)
+        results = list(results_gen)
     if not results:
         return "검색 결과가 없습니다."
     composed = ""
