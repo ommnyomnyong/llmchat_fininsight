@@ -412,7 +412,6 @@ def call_deep_research_model(request: Request, req):
     prompt = req.prompt
     model_name = "gemini-research"  # 예시
 
-    # 세션 이력 제한 + 토크나이저
     messages = prepare_messages_for_model(request, session_id, model_name)
 
     base_deep_research_prompt = (
@@ -430,45 +429,36 @@ def call_deep_research_model(request: Request, req):
 
     combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}" if context_text else f"{base_deep_research_prompt}\n{prompt}"
 
-    # 사용자 요청 DB 저장
     chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="unknown")
 
-    # 메시지 배열에 요청 추가
     messages.append({"role": "user", "content": combined_prompt})
 
-    # 세션 이력 갱신
     session_histories[session_id]["history"] = messages
     session_histories[session_id]["last_access"] = time.time()
 
     try:
         if getattr(req, "model_name", "") == "gemini-research":
-            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={GEMINI_API_KEY}"
             headers = {"Content-Type": "application/json"}
-            params = {"key": GEMINI_API_KEY}
             payload = {
                 "contents": [{"parts": [{"text": combined_prompt}]}],
                 "tools": ["google_search"],
-                "tool_settings": {
+                "toolSettings": {            # key 수정 (카멜 케이스)
                     "google_search": {
                         "max_results": 5
                     }
                 }
             }
-            response = requests.post(api_url, headers=headers, params=params, json=payload, timeout=120)
-            response.raise_for_status()
-            result = response.json()
+            print(f"[DEBUG] API 호출 URL: {api_url}")
+            print(f"[DEBUG] Payload: {payload}")
 
+            response = requests.post(api_url, headers=headers, json=payload, timeout=120)
 
             print(f"[DEBUG] HTTP 상태코드: {response.status_code}")
             print(f"[DEBUG] 응답 헤더: {response.headers}")
 
-            try:
-                response.raise_for_status()
-            except Exception as http_err:
-                print("[ERROR] HTTP 오류 발생!")
-                print(f"[ERROR] HTTP 오류 메시지: {http_err}")
-                print(f"[ERROR] 응답 본문: {response.text}")
-                raise
+            # raise_for_status 는 한 번만 호출
+            response.raise_for_status()
 
             result = response.json()
             print(f"[DEBUG] API 응답 JSON: {result}")
@@ -506,13 +496,13 @@ def call_deep_research_model(request: Request, req):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
 
-    # AI 응답 DB 저장 및 세션 업데이트
     chat_id_ai = save_chat(project_id=None, session_id=session_id, user_input=combined_prompt, bot_output=answer, bot_name="gemini-research")
     session_histories[session_id]["history"].append({
         "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "gemini-research"
     })
 
     return answer
+
 
 # def call_deep_research_model(request: Request, req):
 #     session_histories = request.app.state.session_histories
