@@ -453,13 +453,27 @@ def naver_search(query):
         "display": 3,
         "sort": "date"
     }
-    response = requests.get(url, headers=headers, params=params)
-    response.raise_for_status()
-    data = response.json()
-    snippets = []
-    for item in data.get("items", []):
-        snippets.append(item.get("title", "") + " - " + item.get("originallink", ""))
-    return "\n".join(snippets)
+
+    try:
+        print(f"[DEBUG] 네이버 검색 요청 URL: {url}")
+        print(f"[DEBUG] 네이버 검색 파라미터: {params}")
+        response = requests.get(url, headers=headers, params=params)
+        print(f"[DEBUG] 응답 상태 코드: {response.status_code}")
+        response.raise_for_status()
+        data = response.json()
+        print(f"[DEBUG] 응답 JSON: {data}")
+        snippets = []
+        for item in data.get("items", []):
+            snippets.append(item.get("title", "") + " - " + item.get("originallink", ""))
+        return "\n".join(snippets)
+    except requests.exceptions.HTTPError as e:
+        print(f"[ERROR] HTTP 오류 발생: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] 요청 예외 발생: {e}")
+    except Exception as e:
+        print(f"[ERROR] 알 수 없는 오류 발생: {e}")
+    return ""
+
 
 
 
