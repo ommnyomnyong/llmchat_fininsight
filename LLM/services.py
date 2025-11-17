@@ -9,6 +9,11 @@ import json
 import traceback
 from fastapi import UploadFile
 import tiktoken
+from langchain.tools import DuckDuckGoSearchRun
+from langchain_core.runnables import RunnablePassthrough
+from langchain.prompts import ChatPromptTemplate
+from langchain.chat_models import ChatOpenAI
+from langchain.output_parsers import StrOutputParser
 
 from db.chat_DB import save_chat, load_chat_history_from_db
 from .file_embeddings import (
@@ -312,6 +317,25 @@ def call_grok_model(request: Request, req):
 
     return StreamingResponse(event_generator(), media_type="text/plain")
 
+# 체인 및 도구 초기화 (함수 외부에 두어 재사용 권장)
+duckduckgo_search = DuckDuckGoSearchRun()
+
+template = """Answer the question based on context.
+
+Question: {question}
+Context: {context}
+Answer:"""
+
+prompt = ChatPromptTemplate.from_template(template)
+model = ChatOpenAI(model="gpt-4")
+parser = StrOutputParser()
+
+chain = (
+    {"question": RunnablePassthrough(), "context": RunnablePassthrough()}
+    | prompt
+    | model
+    | parser
+)
 
 def call_deep_research_model(request, req):
     session_histories = request.app.state.session_histories
@@ -341,11 +365,13 @@ def call_deep_research_model(request, req):
         "and reasoning."
     )
 
-    search_results = naver_search(prompt)  # 별도 검색 API 호출
-     # 디버깅용 네이버 검색 결과 출력
-    print(f"[DEBUG] 네이버 검색 결과:\n{search_results}")
+    search_results = duckduckgo_search.invoke(prompt)
+    print(f"[DEBUG] DuckDuckGo 검색 결과:\n{search_results}")
+
     context_text = f"Search results:\n{search_results}"
-    combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}"
+    combined_prompt = f"{base_prompt}\n{context_text}\n{prompt}"
+
+    messages.append({"role": "user", "content": combined_prompt})
 
     # 사용자 요청 DB 저장
     chat_id_user = save_chat(
@@ -441,40 +467,6 @@ def call_deep_research_model(request, req):
     })
 
     return answer
-
-
-def naver_search(query):
-    url = "https://openapi.naver.com/v1/search/news.json"
-    headers = {
-        "X-Naver-Client-Id": 'XVB_Au58t8P9a09xc4sv',
-        "X-Naver-Client-Secret": 'a3aM4ru5LH'
-    }
-    params = {
-        "query": query,
-        "display": 3,
-        "sort": "date"
-    }
-
-    try:
-        print(f"[DEBUG] 네이버 검색 요청 URL: {url}")
-        print(f"[DEBUG] 네이버 검색 파라미터: {params}")
-        response = requests.get(url, headers=headers, params=params)
-        print(f"[DEBUG] 응답 상태 코드: {response.status_code}")
-        response.raise_for_status()
-        data = response.json()
-        print(f"[DEBUG] 응답 JSON: {data}")
-        snippets = []
-        for item in data.get("items", []):
-            snippets.append(item.get("title", "") + " - " + item.get("originallink", ""))
-        return "\n".join(snippets)
-    except requests.exceptions.HTTPError as e:
-        print(f"[ERROR] HTTP 오류 발생: {e}")
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] 요청 예외 발생: {e}")
-    except Exception as e:
-        print(f"[ERROR] 알 수 없는 오류 발생: {e}")
-    return ""
-
 
 
 
