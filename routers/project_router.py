@@ -10,15 +10,16 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from typing import Optional
 
 ## DB 모듈
-from db.vector_DB import add_vectors, search_context, delete_project_vectors, CHROMA_DB_PATH
+from db.vector_DB import add_vectors, delete_project_vectors, CHROMA_DB_PATH
 from db.project_DB import (
     get_project_info, get_project_info_by_name, get_project_files, 
     get_project_chats, create_project, save_project_file, 
     save_project_chat, delete_project, get_all_projects, update_project_name)
 
-## LLM
+## 파일 처리
 from LLM.file_embeddings import extract_text_from_file
-from LLM.services import call_llm
+## LLM
+from LLM.project_llm import call_project_llm
 
 
 router = APIRouter()
@@ -63,12 +64,44 @@ def create_new_project(
         
         # 프로젝트 생성
         new_project_id = create_project(email, project_name, description, project_purpose)
+
+        if not new_project_id:
+            raise HTTPException(500, "프로젝트 생성 실패(DB 오류)")
+        
+        first_prompt = f"""
+                        [프로젝트명]
+                        {project_name}
+
+                        [프로젝트 설명]
+                        {description}
+
+                        [프로젝트 목적]
+                        {project_purpose}
+
+                        위 내용을 기반으로 프로젝트 개요를 분석하고, 요약하세요.
+                        """
+
+        # gemini 기반 첫 메시지 생성
+        first_answer = call_project_llm(
+            model="grok",
+            project_id=new_project_id,
+            prompt=first_prompt
+        )
+
+        # 첫 대화 저장
+        save_project_chat(
+            project_id=new_project_id,
+            user_input="",
+            bot_output=first_answer,
+            model_name="grok"
+        )
+
         return {
             "message": f"프로젝트 '{project_name}' 생성 완료",
             "project_id": new_project_id,
             "project_name": project_name,
+            "first_ai_message": first_answer    # 프론트에서 사용하는 필드명
         }
-        
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 생성 실패: {str(e)} ❌")
@@ -90,18 +123,16 @@ async def upload_project_file(
         
         
        # 이메일별 디렉토리 생성
-        user_upload_dir = os.path.join(BASE_UPLOAD_DIR, str(project_id))
-        os.makedirs(user_upload_dir, exist_ok=True)
+        upload_dir = os.path.join(BASE_UPLOAD_DIR, str(project_id))
+        os.makedirs(upload_dir, exist_ok=True)
 
         # 파일 저장
         file_bytes = await file.read()
-        save_path = os.path.join(user_upload_dir, f"{project_id}_{file.filename}")
+        save_path = os.path.join(upload_dir, f"{project_id}_{file.filename}")
             
         with open(save_path, "wb") as f:
             f.write(file_bytes)
 
-        # 파일 사이즈 계산
-        file_size = len(file_bytes)
         
         ## 텍스트 추출
         text = extract_text_from_file(file_bytes, file.filename) 
@@ -116,12 +147,12 @@ async def upload_project_file(
             project_id=project_id,
             file_name=file.filename,
             mime_type=file.content_type,
-            file_path=save_path,       
-            file_size=file_size
+            file_path=save_path,
+            file_size=len(file_bytes)
         )
         
-        return {"message": f"파일 '{file.filename}' 업로그 및 임베딩 완료",
-                "file_size": file_size}
+        return {"message": f"파일 '{file.filename}' 업로드 및 임베딩 완료",
+                "file_size":len(file_bytes)}
     
     except Exception as e:
         traceback.print_exc()
@@ -134,6 +165,7 @@ async def project_chat(
     project_id: int = Form(...),
     model_name: str = Form(...),
     user_input: str = Form(...),
+    file: Optional[UploadFile] = File(None)
 ):
     
     """
@@ -148,36 +180,20 @@ async def project_chat(
             raise HTTPException(status_code=404, detail=f"❌ 프로젝트 {project_id}가 존재하지 않습니다 ❌")
       
         
-        # 최근 대화 불러오기
-        history = get_project_chats(project_id, limit=5)  # 최근 5개만 --- limit 수정
-        history_text = "\n".join([f"User: {h['user_input']}\nBot: {h['bot_output']}" for h in history])
-        
-        
-        vector_dir = os.path.join(BASE_VECTOR_DIR, str(project_id))
-        os.makedirs(vector_dir, exist_ok=True)
+        # 파일 기반 문맥 추가
+        file_text = ""
+        if file:
+            content = await file.read()
+            file_text = extract_text_from_file(content, file.filename)
 
-        # 벡터 검색 (오류 방지)
-        try:
-            context = search_context(
-                project_id=project_id,
-                query=user_input,
-                top_k=3
-            )
-        except Exception:
-            context = None
-        context_text = f"\n\n[참고 문서 내용]\n{context}" if context else ""
+        context_text = f"[파일 내용]\n{file_text}\n\n" if file_text else ""
 
-        
-        # 프롬프트 구성
-        prompt = f"{history_text}\nUser: {user_input}\nBot:"
-        
-        ## LLM 응답
-        answer = call_llm(model_name, prompt, context_text)
-
-
-        # 대화 DB에 저장
-        save_project_chat(project_id, user_input, answer, model_name)
-
+        answer = call_project_llm(
+            model=model_name,
+            project_id=project_id,
+            prompt=context_text + user_input
+        )
+            
 
         return {"bot_output": answer}
 
@@ -186,7 +202,6 @@ async def project_chat(
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 대화 실패: {str(e)} ❌")
-
 
 
 ## ---------------------- 프로젝트별 대화/파일/정보 불러오기 ----------------------
@@ -233,15 +248,42 @@ def get_chat_history(project_id: int):
 def rename_project(project_id: int, data: dict):
     new_name = data.get("project_name")
     if not new_name:
-        raise HTTPException(status_code=400, detail="project_name is required")
+        raise HTTPException(status_code=400, detail="project_name 필요")
 
     success = update_project_name(project_id, new_name)
     if not success:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail="프로젝트 없음")
 
     # 메시지 대신 변경된 프로젝트 정보 반환
     return {"id": project_id, "project_name": new_name}
 
+## ---------------------- 대화 저장 전용 ----------------------
+@router.post("/chat/save")
+async def save_chat_only(
+    project_id: int = Form(...),
+    user_input: str = Form(...),
+    bot_output: str = Form(...),
+):
+    """
+    프론트(ChatPage.jsx)에서 실시간 메시지 저장을 위해 사용하는 API
+    LLM 호출용이 아니라 '대화 기록만 저장'하는 라우트
+    """
+
+    try:
+        project = get_project_info(project_id)
+        if not project:
+            raise HTTPException(404, "프로젝트가 존재하지 않습니다.")
+
+        save_project_chat(
+            project_id, user_input, bot_output, "manual-save"
+        )
+
+
+        return {"status": "success"}
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"❌ 대화 저장 실패: {str(e)}")
 
 
 ## ---------------------- 파일 자동 삭제 ----------------------
