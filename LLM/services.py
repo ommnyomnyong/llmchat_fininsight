@@ -9,7 +9,7 @@ import json
 import traceback
 from fastapi import UploadFile
 import tiktoken
-from langchain.tools import DuckDuckGoSearchRun
+from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.runnables import RunnablePassthrough
 from langchain.prompts import ChatPromptTemplate
 from langchain.chat_models import ChatOpenAI
