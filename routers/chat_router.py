@@ -4,7 +4,7 @@ from typing import Optional, Union
 from db.chat_DB import save_chat, get_chats, update_chat, get_chat_by_id
 from LLM.services import (
     call_openai_model, call_gemini_model, call_grok_model,
-    call_deep_research_model, update_session_history
+    call_deep_research_model #update_session_history
 )
 from LLM.models import ModelRequest
 
@@ -67,10 +67,10 @@ async def agent_call(
             answer = ai_response["answer"] if isinstance(ai_response, dict) else str(ai_response)
 
         # 채팅 내용 저장/수정
-        if chat_id:
-            update_session_history(session_id, chat_id, new_prompt, answer)
-        print('[DEBUG] session_histories[session_id]:', session_histories.get(session_id))
-        print('[DEBUG] chat_id:', chat_id)
+        # if chat_id:
+        #     update_session_history(session_id, chat_id, new_prompt, answer)
+        # print('[DEBUG] session_histories[session_id]:', session_histories.get(session_id))
+        # print('[DEBUG] chat_id:', chat_id)
 
         return answer
     except Exception as e:
