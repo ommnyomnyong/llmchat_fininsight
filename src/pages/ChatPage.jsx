@@ -96,27 +96,45 @@ useEffect(() => {
   // 프로젝트 선택
   const handleSelectProject = async (pid) => {
     setSelectedProjectId(pid);
-    setSelectedChatId(null); // ✅ 추가: 채팅 선택 해제
-    console.log("📂 선택된 프로젝트 ID:", pid);
+    
+    const chatId = `project-${pid}`;
+    setSelectedChatId(chatId);
 
     try {
       const res = await axios.get(`http://223.130.156.200:8000/project/chat/history?project_id=${pid}`);
-      const chatsFromDB = res.data.chats || [];
+      const chatsFromDB = res.data.chats ?? [];
 
       console.log("💬 프로젝트별 채팅 불러오기:", chatsFromDB);
 
       // 백엔드의 chat 데이터 형식에 맞게 messages로 변환
       const formatted = chatsFromDB.map((c, idx) => ({
-        id: c.id || `m-${idx}`,
-        role: "user", // 또는 c.role
-        text: c.user_input + "\n\n" + c.bot_output,
-        createdAt: new Date().toISOString(),
-      }));
+        const m = [];
+      
+      if (c.user_input) {
+        m.push({
+          id: `m-${idx}-u`,
+          role: "user",
+          text: c.user_input,
+          createdAt: c.created_at || nowISO(),
+        });
+      }
 
-      // 프로젝트 전용 "가상 채팅 ID"로 messages 저장
+      if (c.bot_output) {
+        m.push({
+          id: `m-${idx}-a`,
+          role: "assistant",
+          text: c.bot_output,
+          createdAt: c.created_at || nowISO(),
+        });
+      }
+
+      return m;
+    });
+    // 프로젝트 전용 "가상 채팅 ID"로 messages 저장
       const chatId = `project-${pid}`;
       setMessages((prev) => ({ ...prev, [chatId]: formatted }));
       setSelectedChatId(chatId);
+
     } catch (err) {
       console.error("❌ 채팅 불러오기 실패:", err);
     }
@@ -135,21 +153,20 @@ useEffect(() => {
 
       const res = await axios.post("http://223.130.156.200:8000/project/create", formData);
       console.log("📁 프로젝트 생성 결과:", res.data);
+
+      const pid = res.data.project_id;
+      const initAnswer = res.data.first_ai_message;
       
       // 목록 갱신
       const listRes = await axios.get(`http://223.130.156.200:8000/project/list?email=${email}`);
       setProjects(Array.isArray(listRes.data) ? listRes.data : listRes.data.projects || []);
 
-      const projectId = res.data.project_id;
-      // 프로젝트 생성 직후 자동 선택
-      setSelectedProjectId(projectId);
-
-      // 새 프로젝트의 채팅 ID 등록
-      const chatId = `project-${projectId}`;
+      const chatId = `project-${pid}`;
+      setSelectedProjectId(pid);
       setSelectedChatId(chatId);
 
-      // UI → ChatWindow로 자동 이동 효과  
-      navigate(`/chat?project=${projectId}`);
+      // 5) 페이지 이동
+      navigate(`/chat?project=${pid}`);
 
     } catch (err) {
       console.error("❌ 프로젝트 생성 실패:", err);
@@ -195,6 +212,17 @@ const deleteProject = async (projectId) => {
   } catch (err) {
     console.error("❌ 프로젝트 삭제 실패:", err);
   }
+};
+// 프로젝트 대화 저장 API
+const saveMessageToDB = async ({ projectId, userText, botText}) => {
+    const form = new FormData();
+    form.append("project_id", projectId);
+    form.append("user_input", userText);
+    form.append("bot_output", botText);
+
+  return axios.post("http://127.0.0.1:8000/project/chat/save", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 };
 
 
@@ -298,62 +326,55 @@ const deleteProject = async (projectId) => {
             : model;
       }
 
-      // 4) 백엔드 요청
+      // 백엔드 요청
+      let cleaned = "";
+    
       try {
-        const formData = new FormData();
-        formData.append("session_id", chatId);
-        formData.append("prompt", text);
-        if (selectedProjectId)
-          formData.append("project_id", selectedProjectId);
-
-        // ✅ 파일이 있으면 함께 전송
-        if (file) {
-          formData.append("file", file);
-        }
-
-        const response = await fetch(
-          `http://223.130.156.200:8000/chat/agent-call/${modelName}`,
-          {
+        if (isProjectChat) {
+          // 프로젝트 기반 LLM 호출
+          const pForm = new FormData();
+          pForm.append("project_id", selectedProjectId);
+          pForm.append("model_name", modelName);
+          pForm.append("user_input", text);
+  
+          const pRes = await axios.post("http://127.0.0.1:8000/project/chat", pForm);
+  
+          cleaned = pRes.data.bot_output;
+        } else {
+  
+          // 일반 채팅 호출 (/chat/agent-call)
+          const formData = new FormData();
+          formData.append("session_id", chatId);
+          formData.append("prompt", text);
+  
+          const response = await fetch(`http://127.0.0.1:8000/chat/agent-call/${modelName}`,
+            {
             method: "POST",
             body: formData,
-          }
-        );
+            }
+          );
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const data = await response.text();
-
-        function formatGeminiText(text) {
-          if (typeof text !== "string") return text;
-          let t = text.trim();
-
-          if (
-            (t.startsWith('"') && t.endsWith('"')) ||
-            (t.startsWith("'") && t.endsWith("'"))
-          ) {
-            t = t.slice(1, -1).trim();
-          }
-
-          t = t
-            .replace(/\\r\\n/g, "\n")
-            .replace(/\\n/g, "\n")
-            .replace(/\\t/g, " ")
-            .replace(/\\"/g, '"')
-            .replace(/\\\\/g, "\\");
-
-          return t.trim();
+           if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          cleaned = await response.text();
         }
 
-        const cleaned = formatGeminiText(data);
-
         // 응답을 UI에 반영
-        setMessages((prev) => {
+        setMessages(prev => {
           const updated = [...(prev[chatId] ?? [])];
-          const idx = updated.findIndex((m) => m.id === replyMsgId);
-          if (idx !== -1)
-            updated[idx] = { ...updated[idx], text: cleaned };
+          const idx = updated.findIndex(m => m.id === replyMsgId);
+  
+          if (idx !== -1) updated[idx] = { ...updated[idx], text: cleaned };
           return { ...prev, [chatId]: updated };
         });
+        
+        // DB에 메시지 저장 (user_input + bot_output)
+        if (selectedProjectId) {
+        await saveMessageToDB({
+          projectId: selectedProjectId,
+          userText: text,
+          botText: cleaned,
+        });
+      }
       } catch (error) {
         console.error("❌ 요청 중 오류 발생:", error);
         const errorMsg = {
