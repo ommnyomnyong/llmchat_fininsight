@@ -20,6 +20,8 @@ async def agent_call(
     project_id: Optional[int] = Form(None),
     file: Optional[Union[UploadFile, str]] = File(None)
 ):
+    print(f"[DEBUG] session_id: {session_id!r}")
+    print(f"[DEBUG] prompt: {new_prompt!r}")
     session_histories = request.app.state.session_histories
     try:
         text_from_file = None
@@ -78,6 +80,21 @@ async def agent_call(
         traceback_str = ''.join(traceback.format_exception(None, e, e.__traceback__))
         print(f"[ERROR] Exception in agent_call:\n{traceback_str}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+@router.post("/chat/{session_id}/generate-title")
+async def generate_title_for_chat(
+    session_id: str,
+    first_user_message: str = Form(...)
+):
+    """
+    세션 ID와 첫 사용자 메시지를 받아 간단 요약 제목 생성 후 반환
+    """
+    try:
+        title = generate_chat_title(session_id, first_user_message)
+        # 필요 시 DB에 제목 저장하는 로직 추가 가능
+        return {"title": title}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"제목 생성 실패: {str(e)}")
 
 @router.post("/save")
 def save_chat_message(
