@@ -277,68 +277,6 @@ def call_gemini_model(request: Request, req):
 #     })
 #     return answer
 
-def call_grok_model(request: Request, req):
-    session_histories = request.app.state.session_histories
-    session_id = req.session_id
-    prompt = req.prompt
-    model_name = "grok-4"
-
-    # 세션 이력 제한 + 토크나이저
-    messages = prepare_messages_for_model(request, session_id, model_name)
-    messages.append({"role": "user", "content": prompt})
-    # 첫 메시지이면 제목 생성 로직 실행
-    if len(messages) == 1:
-        chat_title = generate_chat_title(session_id, prompt)
-        # 제목 저장: DB 저장 함수나 세션 내 별도 필드에 저장 가능
-        print(f"[INFO] 세션 {session_id} 제목 생성: {chat_title}")
-    session_histories[session_id]["history"] = messages
-    session_histories[session_id]["last_access"] = time.time()
-
-    chat_id_user = save_chat(session_id, prompt, "", "unknown")
-
-    api_url = "https://api.x.ai/v1/chat/completions"
-    api_key = os.getenv("XAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="Grok(xAI) API Key 미설정")
-
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": "grok-4",
-        "messages": messages,
-        "max_tokens": 2048,
-        "stream": True
-    }
-
-    try:
-        response = requests.post(api_url, headers=headers, json=payload, stream=True, timeout=120)
-        if response.status_code != 200:
-            try:
-                err_json = response.json()
-            except Exception:
-                err_json = response.text
-            raise HTTPException(status_code=response.status_code,
-                detail=f"Grok(xAI) API 호출 실패 (status {response.status_code}): {err_json}")
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Grok(xAI) 네트워크 예외: {str(e)}")
-
-    def event_generator():
-        answer = ""
-        for line in response.iter_lines():
-            if line:
-                try:
-                    json_line = json.loads(line.decode('utf-8').replace("data: ", ""))
-                    token = json_line['choices'][0].get('delta', {}).get('content', '')
-                    answer += token
-                    yield token
-                except Exception:
-                    continue
-        chat_id_ai = save_chat(session_id, prompt, answer, "grok")
-        session_histories[session_id]["history"].append({
-            "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "grok"
-        })
-
-    return StreamingResponse(event_generator(), media_type="text/plain")
-
 
 # def call_grok_model(request: Request, req):
 #     session_histories = request.app.state.session_histories
@@ -507,7 +445,15 @@ def call_deep_research_model(request: Request, req):
             api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
             headers = {"Content-Type": "application/json"}
             params = {"key": GEMINI_API_KEY}
-            payload = {"contents": [{"parts": [{"text": combined_prompt}]}]}
+            payload = {
+                "contents": [{"parts": [{"text": combined_prompt}]}],
+                "tools": ["google_search"],
+                "tool_settings": {
+                    "google_search": {
+                        "max_results": 5
+                    }
+                }
+            }
             response = requests.post(api_url, headers=headers, params=params, json=payload, timeout=120)
             response.raise_for_status()
             result = response.json()
