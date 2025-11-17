@@ -516,14 +516,14 @@ def _call_grok(prompt: str):
     try:
         headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
         payload = {
-            "model": "grok-1",
+            "model": "grok-4",
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt},
             ],
         }
 
-        response = requests.post("https://api.grok.ai/v1/chat/completions", headers=headers, json=payload)
+        response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=payload)
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail=f"Grok API 오류: {response.text}")
 
