@@ -512,12 +512,34 @@ def call_deep_research_model(request: Request, req):
             response.raise_for_status()
             result = response.json()
 
+
+            print(f"[DEBUG] HTTP 상태코드: {response.status_code}")
+            print(f"[DEBUG] 응답 헤더: {response.headers}")
+
+            try:
+                response.raise_for_status()
+            except Exception as http_err:
+                print("[ERROR] HTTP 오류 발생!")
+                print(f"[ERROR] HTTP 오류 메시지: {http_err}")
+                print(f"[ERROR] 응답 본문: {response.text}")
+                raise
+
+            result = response.json()
+            print(f"[DEBUG] API 응답 JSON: {result}")
+
             if not isinstance(result, dict):
+                print("[ERROR] 응답이 dict 타입이 아님!")
+                print(f"[ERROR] 원본 응답: {result}")
                 raise Exception(f"Gemini 응답이 dict가 아님: {result}")
+
             if "quotaExceeded" in result:
+                print("[ERROR] 쿼터 초과 감지됨!")
                 raise HTTPException(status_code=429, detail="API 사용량(비용/쿼터) 초과입니다.")
+
             if "error" in result:
+                print(f"[ERROR] API 에러 메시지: {result['error']}")
                 raise HTTPException(status_code=500, detail=f"Gemini 오류: {result['error']}")
+
             if "output_text" in result:
                 answer = result["output_text"]
             elif "candidates" in result and result["candidates"]:
@@ -525,9 +547,16 @@ def call_deep_research_model(request: Request, req):
                 answer = "".join(part.get("text", "") for part in parts)
             else:
                 answer = "No response."
+                print("[WARN] 예상치 못한 응답 포맷, 답변 없음")
+
         else:
+            print("[ERROR] 지원하지 않는 모델 호출 시도")
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
     except Exception as e:
+        print("\n[EXCEPTION] Deep Research 모델 호출 중 예외 발생!")
+        print(f"[EXCEPTION] 예외 타입: {type(e)}")
+        print(f"[EXCEPTION] 예외 메시지: {str(e)}")
+        print("[EXCEPTION] 전체 트레이스백:")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Deep Research model call failed: {str(e)}")
 
