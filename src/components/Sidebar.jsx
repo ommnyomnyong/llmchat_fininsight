@@ -109,21 +109,32 @@ export default function Sidebar({
     fetchProjects(setProjects);
   }, [setProjects]);
 
-  // ✅ 마운트 시 채팅 목록 불러오기 (추가됨)
+  // 백엔드 @router.get("/list") API 호출하여 채팅 기록 로드
   useEffect(() => {
     async function fetchChats() {
       try {
-        const sessionId = localStorage.getItem("session_id");
+        // session_id를 로컬스토리지(또는 필요한 다른 위치)에서 가져옴
+        const sessionId = localStorage.getItem("session_id"); 
         if (!sessionId) {
-          console.warn("session_id 가 없어서 채팅 목록 로드 불가");
+          console.warn("[WARN] session_id 가 존재하지 않습니다.");
           return;
         }
+
+        // API 호출, session_id 쿼리 파라미터 전달
         const res = await axios.get("/chat/list", { params: { session_id: sessionId } });
-        setChats(res.data.chats);
+        
+        if (res.data?.chats && Array.isArray(res.data.chats)) {
+          // 받아온 채팅 배열을 상태에 저장
+          setChats(res.data.chats);
+          console.log("[INFO] 채팅 기록 성공적으로 로드됨:", res.data.chats);
+        } else {
+          console.warn("[WARN] /chat/list 응답에 chats 데이터가 없습니다.", res.data);
+        }
       } catch (error) {
-        console.error("채팅 목록 불러오기 실패", error);
+        console.error("[ERROR] 채팅 기록 로드 실패:", error);
       }
     }
+
     fetchChats();
   }, [setChats]);
 
