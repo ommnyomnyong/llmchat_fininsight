@@ -109,6 +109,24 @@ export default function Sidebar({
     fetchProjects(setProjects);
   }, [setProjects]);
 
+  // ✅ 마운트 시 채팅 목록 불러오기 (추가됨)
+  useEffect(() => {
+    async function fetchChats() {
+      try {
+        const sessionId = localStorage.getItem("session_id");
+        if (!sessionId) {
+          console.warn("session_id 가 없어서 채팅 목록 로드 불가");
+          return;
+        }
+        const res = await axios.get("/chat/list", { params: { session_id: sessionId } });
+        setChats(res.data.chats);
+      } catch (error) {
+        console.error("채팅 목록 불러오기 실패", error);
+      }
+    }
+    fetchChats();
+  }, [setChats]);
+
   // (예시) 새 채팅 생성 후 제목 받아 상태에 반영하는 함수
   const handleCreateChat = async () => {
     // 1. 새 채팅 생성: onCreateChat이 반드시 새 채팅을 리턴한다고 가정
