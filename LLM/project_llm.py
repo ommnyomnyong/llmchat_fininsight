@@ -5,11 +5,11 @@ from fastapi import HTTPException
 from dotenv import load_dotenv
 
 # DB
-from backend.db.project_DB import get_project_chats, save_project_chat
-from backend.db.vector_DB import search_context
+from db.project_DB import get_project_chats, save_project_chat
+from db.vector_DB import search_context
 
 # 파일 처리
-from backend.LLM.file_embeddings import extract_text_from_file
+from LLM.file_embeddings import extract_text_from_file
 
 load_dotenv()
 
@@ -212,3 +212,4 @@ def call_project_llm(model: str, project_id: int, prompt: str, uploaded_file_byt
     save_project_chat(project_id, prompt, answer, model)
 
     return answer
+
