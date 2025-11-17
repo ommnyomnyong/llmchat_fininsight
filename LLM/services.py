@@ -406,7 +406,7 @@ def call_grok_model(request: Request, req):
     return StreamingResponse(event_generator(), media_type="text/plain")
 
 
-def call_deep_research_model(request: Request, req):
+def call_deep_research_model_with_external_search(request, req):
     session_histories = request.app.state.session_histories
     session_id = req.session_id
     prompt = req.prompt
@@ -422,12 +422,13 @@ def call_deep_research_model(request: Request, req):
         "and reasoning."
     )
 
-    context_text = None
-    embedding = get_embedding_from_session(session_id)
-    if embedding:
-        context_text = "참고 문서 내용 포함"
+    # 1) 별도 검색 엔진 API 호출 예 (Google Search API, Bing, 네이버 등)
+    search_results = naver_search(prompt)
 
-    combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}" if context_text else f"{base_deep_research_prompt}\n{prompt}"
+    # 2) 검색 결과를 적절히 요약하거나 쿼리와 함께 프롬프트에 포함
+    context_text = f"Search results:\n{search_results}"
+
+    combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}"
 
     chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="unknown")
 
@@ -444,14 +445,9 @@ def call_deep_research_model(request: Request, req):
                 "Authorization": f"Bearer {GEMINI_API_KEY}"
             }
             payload = {
-                "contents": [{"parts": [{"text": combined_prompt}]}],
-                "tools": ["google_search"],
-                "toolSettings": {            # key 수정 (카멜 케이스)
-                    "google_search": {
-                        "max_results": 5
-                    }
-                }
+                "contents": [{"parts": [{"text": combined_prompt}]}]
             }
+
             print(f"[DEBUG] API 호출 URL: {api_url}")
             print(f"[DEBUG] Payload: {payload}")
 
@@ -460,7 +456,6 @@ def call_deep_research_model(request: Request, req):
             print(f"[DEBUG] HTTP 상태코드: {response.status_code}")
             print(f"[DEBUG] 응답 헤더: {response.headers}")
 
-            # raise_for_status 는 한 번만 호출
             response.raise_for_status()
 
             result = response.json()
@@ -491,6 +486,7 @@ def call_deep_research_model(request: Request, req):
         else:
             print("[ERROR] 지원하지 않는 모델 호출 시도")
             raise HTTPException(status_code=400, detail="지원하지 않는 모델입니다.")
+
     except Exception as e:
         print("\n[EXCEPTION] Deep Research 모델 호출 중 예외 발생!")
         print(f"[EXCEPTION] 예외 타입: {type(e)}")
@@ -506,6 +502,24 @@ def call_deep_research_model(request: Request, req):
 
     return answer
 
+def naver_search(query):
+    url = "https://openapi.naver.com/v1/search/news.json"
+    headers = {
+        "X-Naver-Client-Id": 'XVB_Au58t8P9a09xc4sv',
+        "X-Naver-Client-Secret": 'a3aM4ru5LH'
+    }
+    params = {
+        "query": query,
+        "display": 3,
+        "sort": "date"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    response.raise_for_status()
+    data = response.json()
+    snippets = []
+    for item in data.get("items", []):
+        snippets.append(item.get("title", "") + " - " + item.get("originallink", ""))
+    return "\n".join(snippets)
 
 # def call_deep_research_model(request: Request, req):
 #     session_histories = request.app.state.session_histories
