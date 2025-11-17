@@ -438,8 +438,11 @@ def call_deep_research_model(request: Request, req):
 
     try:
         if getattr(req, "model_name", "") == "gemini-research":
-            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={GEMINI_API_KEY}"
-            headers = {"Content-Type": "application/json"}
+            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {GEMINI_API_KEY}"
+            }
             payload = {
                 "contents": [{"parts": [{"text": combined_prompt}]}],
                 "tools": ["google_search"],
