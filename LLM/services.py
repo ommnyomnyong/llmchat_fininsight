@@ -136,7 +136,13 @@ def call_openai_model(request: Request, req):
     session_histories[session_id]["last_access"] = time.time()
 
     # 사용자 메시지 DB 저장
-    chat_id_user = save_chat(session_id, prompt, "", "unknown")
+    chat_id_user = save_chat(
+    project_id=None,  # 없으면 None 명시
+    session_id=session_id,
+    user_input=prompt,
+    bot_output="",
+    bot_name="openai"
+)
 
     api_url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
@@ -202,7 +208,7 @@ def call_gemini_model(request: Request, req):
     session_histories[session_id]["last_access"] = time.time()
 
     # 사용자 메시지 DB 저장
-    chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="unknown")
+    chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="gemini")
 
     gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
     headers = {"Content-Type": "application/json"}
@@ -223,7 +229,13 @@ def call_gemini_model(request: Request, req):
         raise HTTPException(status_code=500, detail=f"Gemini 응답 파싱 실패: {str(e)}")
 
     # AI 답변 DB 저장 및 세션에 추가
-    chat_id_ai = save_chat(session_id, prompt, answer, "gemini")
+    chat_id_ai = save_chat(
+    project_id=None,
+    session_id=session_id,
+    user_input=prompt,
+    bot_output=answer,
+    bot_name="gemini"
+)
     session_histories[session_id]["history"].append({
         "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "gemini"
     })
@@ -243,7 +255,13 @@ def call_grok_model(request: Request, req):
     session_histories[session_id]["history"] = messages
     session_histories[session_id]["last_access"] = time.time()
 
-    chat_id_user = save_chat(session_id, prompt, "", "unknown")
+    chat_id_user = save_chat(
+    project_id=None,  # 없으면 None 명시
+    session_id=session_id,
+    user_input=prompt,
+    bot_output="",
+    bot_name="unknown"
+)
 
     api_url = "https://api.x.ai/v1/chat/completions"
     api_key = os.getenv("XAI_API_KEY")
@@ -281,9 +299,15 @@ def call_grok_model(request: Request, req):
                     yield token
                 except Exception:
                     continue
-        chat_id_ai = save_chat(session_id, prompt, answer, "grok")
+            chat_id_user = save_chat(
+            project_id=None,  # 없으면 None 명시
+            session_id=session_id,
+            user_input=prompt,
+            bot_output="",
+            bot_name="grok"
+        )
         session_histories[session_id]["history"].append({
-            "id": chat_id_ai, "role": "assistant", "content": answer, "bot_name": "grok"
+            "id": chat_id_user, "role": "assistant", "content": answer, "bot_name": "grok"
         })
 
     return StreamingResponse(event_generator(), media_type="text/plain")
@@ -310,7 +334,7 @@ def call_deep_research_model(request, req):
     context_text = f"Search results:\n{search_results}"
     combined_prompt = f"{base_deep_research_prompt}\n{context_text}\n{prompt}"
 
-    chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="unknown")
+    chat_id_user = save_chat(project_id=None, session_id=session_id, user_input=prompt, bot_output="", bot_name="deep-research")
 
     messages.append({"role": "user", "content": combined_prompt})
 
