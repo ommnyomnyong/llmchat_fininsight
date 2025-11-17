@@ -516,7 +516,7 @@ def _call_grok(prompt: str):
     try:
         headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
         payload = {
-            "model": "grok-2",
+            "model": "grok-4",
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt},
