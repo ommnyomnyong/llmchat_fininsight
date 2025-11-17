@@ -68,6 +68,19 @@ const fetchProjects = async (setProjects) => {
   }
 };
 
+// (예시) 새 채팅 생성 후 요약 제목 API 호출 함수
+const fetchChatTitle = async (sessionId, firstUserText) => {
+  try {
+    const params = new URLSearchParams();
+    params.append("first_user_message", firstUserText);
+    const res = await axios.post(`/chat/${sessionId}/generate-title`, params);
+    return res.data.title; // 요약 제목 반환
+  } catch (err) {
+    console.error("❌ 요약 제목 생성 실패:", err);
+    return null;
+  }
+};
+
 export default function Sidebar({
   collapsed,
   onToggleCollapse,
@@ -76,6 +89,7 @@ export default function Sidebar({
   projects,
   setProjects,
   chats,
+  setChats, // 채팅 상태 업데이트 가능하도록 props에 추가 필요
   selectedProjectId,
   selectedChatId,
   onSelectProject,
@@ -94,6 +108,29 @@ export default function Sidebar({
   useEffect(() => {
     fetchProjects(setProjects);
   }, [setProjects]);
+
+  // (예시) 새 채팅 생성 후 제목 받아 상태에 반영하는 함수
+  const handleCreateChat = async () => {
+    // 1. 새 채팅 생성: onCreateChat이 반드시 새 채팅을 리턴한다고 가정
+    const newChat = await onCreateChat?.();
+    if (!newChat) return;
+
+    // 2. 첫 메시지가 있다면 제목 생성 API 호출
+    if (newChat.session_id && newChat.first_message_text) {
+      const title = await fetchChatTitle(newChat.session_id, newChat.first_message_text);
+
+      // 3. 제목 필드가 있다면 chats 상태 업데이트
+      if (title) {
+        setChats((prev) =>
+          prev.map((c) =>
+            c.id === newChat.id
+              ? { ...c, title }
+              : c
+          )
+        );
+      }
+    }
+  };
 
   return (
     <aside
@@ -219,7 +256,6 @@ export default function Sidebar({
                             if (!name?.trim()) return;
                             const newName = name.trim();
                             try {
-                              // ✅ UI 즉시 반영
                               setProjects(prev =>
                                 prev.map(x =>
                                   x.id === p.id ? { ...x, project_name: newName } : x
@@ -234,7 +270,6 @@ export default function Sidebar({
                           onDelete={async () => {
                             if (!window.confirm("정말 삭제하시겠습니까?")) return;
                             try {
-                              // ✅ UI 즉시 반영
                               setProjects(prev => prev.filter(x => x.id !== p.id));
                               await axios.delete(`/project/delete/${p.id}`);
                               await fetchProjects(setProjects);
@@ -269,14 +304,14 @@ export default function Sidebar({
 
           {/* 채팅 */}
           <section>
-            <HeaderWithPlus title="채팅" onPlus={() => onCreateChat?.()} />
+            <HeaderWithPlus title="채팅" onPlus={handleCreateChat} />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {chats.map((c) => (
                 <ItemRow
                   key={c.id}
                   active={selectedChatId === c.id}
                   icon={<FiMessageCircle color="#64748b" />}
-                  label={c.name}
+                  label={c.title || c.name} // 제목 우선 표시
                   onClick={() => onSelectChat?.(c.id)}
                   menu={
                     openMenuKey === `c-${c.id}` && (
