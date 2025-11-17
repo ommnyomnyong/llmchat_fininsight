@@ -160,6 +160,12 @@ def build_project_context(project_id: int, prompt: str, uploaded_file_bytes=None
             "role": "system",
             "content": f"[문서 기반 검색 결과]\n{rag_context}"
         })
+    else:
+        # 벡터 데이터 없을 때 빈 내용 또는 기본 문구로 대체
+        messages.append({
+            "role": "system",
+            "content": "[문서 기반 검색 결과가 없습니다]"
+        })
 
     # 업로드 파일 기반 내용
     if uploaded_file_bytes and filename:
