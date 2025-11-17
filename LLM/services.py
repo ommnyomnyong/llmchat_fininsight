@@ -9,7 +9,7 @@ import json
 import traceback
 from fastapi import UploadFile
 import tiktoken
-from duckduckgo_search import ddg
+from ddgs import DDGS
 
 from db.chat_DB import save_chat, load_chat_history_from_db
 from .file_embeddings import (
@@ -314,13 +314,17 @@ def call_grok_model(request: Request, req):
     return StreamingResponse(event_generator(), media_type="text/plain")
 
 def duckduckgo_query(query: str, max_results: int = 5):
-    results = ddg(query, max_results=max_results)
-    # 검색 결과에서 제목과 간략 설명 추출해 문자열로 만듦
+    with DDGS() as ddgs:
+        results_gen = ddgs.text(keywords=query, max_results=max_results)
+        results = list(results_gen)  # generator를 리스트로 변환
     if not results:
         return "검색 결과가 없습니다."
     composed = ""
     for i, r in enumerate(results):
-        composed += f"{i+1}. {r.get('title', '')}\n{r.get('body', '')}\n링크: {r.get('href', '')}\n\n"
+        title = r.get('title', '')
+        body = r.get('snippet', '') or r.get('body', '')
+        link = r.get('url', '') or r.get('href', '')
+        composed += f"{i+1}. {title}\n{body}\n링크: {link}\n\n"
     return composed.strip()
 
 

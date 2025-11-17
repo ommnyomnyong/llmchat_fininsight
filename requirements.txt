@@ -9,7 +9,7 @@ langchain>=1.0.4
 langchain-core>=1.0.4
 langchain-openai>=1.0.0
 langchain-chroma>=1.0.0
-duckduckgo-search
+ddgs
 chromadb>=0.4.22
 docx2txt==0.8
 Pillow==10.0.0
