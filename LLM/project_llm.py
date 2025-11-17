@@ -127,7 +127,7 @@ def build_project_context(project_id: int, prompt: str, uploaded_file_bytes=None
         "- 실무 문서 수준으로 작성\n"
     )
     messages.append({"role": "system", "content": system_prompt})
-
+    rag_context = search_context(project_id, prompt)
     # 전체 대화 로드
     all_chats = get_project_chats(project_id)
 
