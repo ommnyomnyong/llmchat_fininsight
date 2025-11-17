@@ -53,14 +53,14 @@ def init_project_db():
             """))
             
             conn.commit()
-        print("✅ projects / project_files / project_chats 테이블 생성 완료!")
+        print("✅ 테이블 생성 완료! ✅")
 
     except Exception as e:
-        print("❌ project_db 테이블 생성 오류:", e)
+        print("❌ project_db 테이블 생성 오류: ❌", e)
 
 
 # ---------------------- 프로젝트 생성 ----------------------
-def create_project(email: str, project_name: str, description: str, project_purpose: str):
+def create_project(email, project_name, description, project_purpose):
     query = text("""
         INSERT INTO projects (email, project_name, description, project_purpose)
         VALUES (:email, :project_name, :description, :project_purpose)
@@ -179,7 +179,7 @@ def save_project_chat(project_id, user_input, bot_output, model_name):
         conn.commit()
 
 
-# ---------------------- 프로젝트 대화 불러오기 ----------------------
+# ---------------------- 프로젝트 대화 조회 ----------------------
 def get_project_chats(project_id: int, limit: int = None):
     limit_clause = f"LIMIT {limit}" if limit else ""
     query = text(f"""
