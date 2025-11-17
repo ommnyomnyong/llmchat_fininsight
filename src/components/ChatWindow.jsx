@@ -31,7 +31,11 @@ export default function ChatWindow({ messages = [], onSend }) {
   const [model, setModel] = useState("gpt");
   const [aiOpen, setAiOpen] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
+  const [text, setText] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
 
+  const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const selected = useMemo(
