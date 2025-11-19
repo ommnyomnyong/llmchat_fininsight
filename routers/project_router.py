@@ -13,13 +13,14 @@ from typing import Optional
 from db.vector_DB import add_vectors, delete_project_vectors, CHROMA_DB_PATH
 from db.project_DB import (
     get_project_info, get_project_info_by_name, get_project_files, 
-    get_project_chats, create_project, save_project_file, 
-    save_project_chat, delete_project, get_all_projects, update_project_name)
+    get_project_chats, create_project, 
+    save_project_file, save_project_chat, delete_project, 
+    get_all_projects, update_project_name)
 
 ## 파일 처리
 from LLM.file_embeddings import extract_text_from_file
 ## LLM
-from LLM.project_llm import call_project_llm
+from LLM.project_llm import call_project_llm, rag_exists
 
 
 router = APIRouter()
@@ -27,6 +28,7 @@ router = APIRouter()
 BASE_UPLOAD_DIR = "backend/uploads"
 BASE_VECTOR_DIR = CHROMA_DB_PATH    # 임베딩 위치 완전 통일
 
+MAX_FILE_SIZE_MB = 20    ## 최대 파일 크기 20MB
 DELETE_AFTER_DAYS = 7    ## 업로드 된 파일 7일마다 자동 삭제
 
 os.makedirs(BASE_UPLOAD_DIR, exist_ok=True)
@@ -67,44 +69,15 @@ def create_new_project(
 
         if not new_project_id:
             raise HTTPException(500, "프로젝트 생성 실패(DB 오류)")
-        
-        first_prompt = f"""
-                        [프로젝트명]
-                        {project_name}
-
-                        [프로젝트 설명]
-                        {description}
-
-                        [프로젝트 목적]
-                        {project_purpose}
-
-                        위 내용을 기반으로 프로젝트 개요를 분석하고, 요약하세요.
-                        """
-
-        # gemini 기반 첫 메시지 생성
-        first_answer = call_project_llm(
-            model="grok",
-            project_id=new_project_id,
-            prompt=first_prompt
-        )
-
-        # 첫 대화 저장
-        save_project_chat(
-            project_id=new_project_id,
-            user_input="",
-            bot_output=first_answer,
-            model_name="grok"
-        )
 
         return {
             "message": f"프로젝트 '{project_name}' 생성 완료",
             "project_id": new_project_id,
             "project_name": project_name,
-            "first_ai_message": first_answer    # 프론트에서 사용하는 필드명
         }
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"❌ 프로젝트 생성 실패: {str(e)} ❌")
+        raise HTTPException(500, f"❌ 프로젝트 생성 실패: {str(e)} ❌")
 
 
 ## ---------------------- 파일 업로드 및 벡터화 ----------------------
@@ -119,15 +92,21 @@ async def upload_project_file(
     try:
         project = get_project_info(project_id)
         if not project:
-            raise HTTPException(status_code=404, detail=f"❌ 프로젝트 {project_id}가 존재하지 않습니다 ❌")
+            raise HTTPException(404, f"❌ 프로젝트 {project_id}가 존재하지 않습니다 ❌")
         
+        
+        ## 파일 크기 제한 (20MB)
+        file_bytes = await file.read()
+        
+        file_size_mb = len(file_bytes) / (1024 * 1024)
+        if file_size_mb > MAX_FILE_SIZE_MB:
+            raise HTTPException(400, f"❌ 파일 용량 초과: {file_size_mb:.2f}MB, 파일을 다시 업로드해주세요.")
         
        # 이메일별 디렉토리 생성
         upload_dir = os.path.join(BASE_UPLOAD_DIR, str(project_id))
         os.makedirs(upload_dir, exist_ok=True)
 
         # 파일 저장
-        file_bytes = await file.read()
         save_path = os.path.join(upload_dir, f"{project_id}_{file.filename}")
             
         with open(save_path, "wb") as f:
@@ -144,11 +123,8 @@ async def upload_project_file(
         
         # 파일 메타데이터 DB 저장
         save_project_file(
-            project_id=project_id,
-            file_name=file.filename,
-            mime_type=file.content_type,
-            file_path=save_path,
-            file_size=len(file_bytes)
+            project_id, file.filename, file.content_type,
+            save_path, len(file_bytes)
         )
         
         return {"message": f"파일 '{file.filename}' 업로드 및 임베딩 완료",
@@ -156,7 +132,7 @@ async def upload_project_file(
     
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"❌ 파일 업로드 실패: {str(e)} ❌")
+        raise HTTPException(500, f"❌ 파일 업로드 실패: {str(e)} ❌")
 
 
 ## ---------------------- 대화 저장 및 LLM 호출 ----------------------
@@ -178,27 +154,29 @@ async def project_chat(
         project = get_project_info(project_id)
         if not project:
             raise HTTPException(status_code=404, detail=f"❌ 프로젝트 {project_id}가 존재하지 않습니다 ❌")
-      
         
         # 파일 기반 문맥 추가
+        context_text = ""
+        
         file_text = ""
         if file:
             content = await file.read()
             file_text = extract_text_from_file(content, file.filename)
+            if file_text:
+                context_text = f"[파일 내용]\n{file_text}\n\n"
 
-        context_text = f"[파일 내용]\n{file_text}\n\n" if file_text else ""
-
+        # LLM 호출 (저장은 project_router에서만)
         answer = call_project_llm(
-            model=model_name,
-            project_id=project_id,
-            prompt=context_text + user_input
+            model = model_name,
+            project_id = project_id,
+            prompt = context_text + user_input
         )
             
-
+        # DB 저장 (중복 저장 없음)
+        save_project_chat(project_id, user_input, answer, model_name)
+        
         return {"bot_output": answer}
 
-    except HTTPException:
-        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 대화 실패: {str(e)} ❌")
@@ -234,7 +212,7 @@ def get_chat_history(project_id: int):
             "chats": chats,  # 프론트에서 챗 내용이 이어서 표시 가능
             "embedding": {
                 "exists": has_embedding,
-                "path": vector_path
+                # "path": vector_path
             }
         }
     
@@ -274,9 +252,7 @@ async def save_chat_only(
         if not project:
             raise HTTPException(404, "프로젝트가 존재하지 않습니다.")
 
-        save_project_chat(
-            project_id, user_input, bot_output, "manual-save"
-        )
+        save_project_chat(project_id, user_input, bot_output, "manual")
 
 
         return {"status": "success"}
@@ -284,25 +260,6 @@ async def save_chat_only(
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, f"❌ 대화 저장 실패: {str(e)}")
-
-
-## ---------------------- 파일 자동 삭제 ----------------------
-def auto_delete_old_files():
-    """
-    일정 기간 지난 파일 자동 삭제
-    """
-    now = time.time()
-    for root, _, files in os.walk(BASE_UPLOAD_DIR):
-        for file in files:
-            path = os.path.join(root, file)
-            if now - os.path.getmtime(path) > DELETE_AFTER_DAYS * 86400:
-                os.remove(path)
-                print(f"🗑️ 자동 삭제 완료: {path}")
-
-## 백그라운드 스케줄러 실행
-scheduler = BackgroundScheduler()
-scheduler.add_job(auto_delete_old_files, "interval", days=1) # 매일 1회 실행
-scheduler.start()
 
 
 ## ---------------------- 전체 프로젝트 목록 (최신순) ----------------------
@@ -346,8 +303,26 @@ def remove_project(project_id: int):
         # 3. 벡터DB에서 해당 프로젝트 데이터 삭제
         delete_project_vectors(project_id)
 
-        return {"message": f"프로젝트 {project_id} 삭제 완료"}
+        return {"message": f"{project_id} 삭제 완료"}
 
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"❌ 프로젝트 삭제 실패: {str(e)} ❌")
+    
+## ---------------------- 파일 자동 삭제 ----------------------
+def auto_delete_old_files():
+    """
+    일정 기간 지난 파일 자동 삭제
+    """
+    now = time.time()
+    for root, _, files in os.walk(BASE_UPLOAD_DIR):
+        for file in files:
+            path = os.path.join(root, file)
+            if now - os.path.getmtime(path) > DELETE_AFTER_DAYS * 86400:
+                os.remove(path)
+                print(f"🗑️ 자동 삭제 완료: {path}")
+
+## 백그라운드 스케줄러 실행
+scheduler = BackgroundScheduler()
+scheduler.add_job(auto_delete_old_files, "interval", days=1) # 매일 1회 실행
+scheduler.start()
