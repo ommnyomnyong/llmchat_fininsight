@@ -107,10 +107,13 @@ useEffect(() => {
     console.log("💬 프로젝트별 채팅 불러오기:", chatsFromDB);
 
     const formatted = chatsFromDB.map((c, idx) => {
-      const m = [];
-
-      if (c.user_input) {
-        m.push({
+      const msgs = [];
+      
+      if (
+        c.user_input && 
+        c.user_input.trim().length > 0 && 
+        c.user_input.trim().length < 1500) {
+        msgs.push({
           id: `m-${idx}-u`,
           role: "user",
           text: c.user_input,
@@ -118,16 +121,16 @@ useEffect(() => {
         });
       }
 
+      // AI 메시지는 정상 추가
       if (c.bot_output) {
-        m.push({
+        msgs.push({
           id: `m-${idx}-a`,
           role: "assistant",
           text: c.bot_output,
           createdAt: c.created_at || nowISO(),
         });
       }
-
-      return m;
+      return msgs;
     });
 
     setMessages((prev) => ({ ...prev, [chatId]: formatted }));
@@ -206,6 +209,18 @@ const deleteProject = async (projectId) => {
 
     await axios.delete(`http://223.130.156.200:8000/project/delete/${projectId}`);
     console.log(`🗑️ 프로젝트 ${projectId} 삭제 완료`);
+    // 선택 취소 (핵심)
+    if (selectedProjectId === projectId) {
+      setSelectedProjectId(null);
+      setSelectedChatId("c-1"); // 기본 채팅으로 이동
+    }
+
+    // messages에서 해당 project 채팅 제거
+    setMessages((prev) => {
+      const newSet = { ...prev };
+      delete newSet[`project-${projectId}`]; 
+      return newSet;
+    });
   } catch (err) {
     console.error("❌ 프로젝트 삭제 실패:", err);
   }
@@ -373,13 +388,13 @@ const saveMessageToDB = async ({ projectId, userText, botText}) => {
         });
       }
       } catch (error) {
-        console.error("❌ 요청 중 오류 발생:", error);
-        const errorMsg = {
-          id: `m-${uuidv4()}`,
-          role: "assistant",
-          text: `오류가 발생했습니다: ${error.message}`,
-          createdAt: new Date().toISOString(),
-        };
+      console.error("❌ 요청 중 오류 발생:", error);
+      const errorMsg = {
+        id: `m-${crypto.randomUUID()}`,
+        role: "assistant",
+        text: `오류: ${error.message}`,
+        createdAt: nowISO(),
+      };
         setMessages((prev) => ({
           ...prev,
           [chatId]: [...(prev[chatId] ?? []), errorMsg],
